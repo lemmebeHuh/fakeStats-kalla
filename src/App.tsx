@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
-import { MapContainer, TileLayer, useMapEvents, Polyline, Marker, LayersControl } from 'react-leaflet'
+import { useState, useEffect, useRef } from 'react'
+import { MapContainer, TileLayer, useMapEvents, Polyline, Marker, LayersControl, useMap } from 'react-leaflet'
 import { fetchOSRMRoute } from './lib/osrm'
-import { generateActivity, TrackPoint } from './lib/realism-engine'
-import { generateTCX, downloadFile } from './lib/tcx-generator'
-import { parseActivityFile, reverseTrack, adjustSpeed } from './lib/xml-parser'
+import { generateActivity, TrackPoint, PacingStrategy } from './lib/realism-engine'
+import { generateTCX, downloadFile, DEVICES } from './lib/tcx-generator'
+import { parseActivityFile } from './lib/xml-parser'
+import Dashboard from './components/Dashboard'
 import L from 'leaflet'
 import 'leaflet-control-geocoder/dist/Control.Geocoder.css';
 import 'leaflet-control-geocoder';
@@ -36,18 +37,30 @@ function GeocoderControl() {
   return null;
 }
 
+function MapBoundsController({ route }: { route: any[] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (route.length > 0) {
+      const bounds = L.latLngBounds(route.map(p => [p.lat, p.lng]));
+      map.fitBounds(bounds, { padding: [50, 50] });
+    }
+  }, [route, map]);
+  return null;
+}
+
 const getDefaultDateTime = () => {
   const now = new Date();
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   return now.toISOString().slice(0, 16);
 };
 
-function App() {
+export default function App() {
   const [history, setHistory] = useState<Waypoint[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
   
   const [osrmRoute, setOsrmRoute] = useState<any[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
+  const [generatedTrack, setGeneratedTrack] = useState<TrackPoint[] | null>(null)
   
   // Customization States
   const [pace, setPace] = useState(6.5)
@@ -55,19 +68,14 @@ function App() {
   const [sport, setSport] = useState<'Running' | 'Walking' | 'Biking'>('Running')
   const [startTimeStr, setStartTimeStr] = useState(getDefaultDateTime())
   const [useRandomStops, setUseRandomStops] = useState(false)
-
-  // Edit Mode States
-  const [editMode, setEditMode] = useState(false)
-  const [uploadedTrack, setUploadedTrack] = useState<TrackPoint[]>([])
-  const [trimmedTrack, setTrimmedTrack] = useState<TrackPoint[]>([])
-  const [trimStart, setTrimStart] = useState(0)
-  const [trimEnd, setTrimEnd] = useState(100)
-  const [editPace, setEditPace] = useState(6.5)
+  const [loops, setLoops] = useState(1)
+  const [pacingStrategy, setPacingStrategy] = useState<PacingStrategy>('Flat')
+  const [deviceKey, setDeviceKey] = useState<keyof typeof DEVICES>('garmin945')
+  const [elevSensitivity, setElevSensitivity] = useState(1.0)
 
   const waypoints = history[historyIndex];
 
   useEffect(() => {
-    if (editMode) return;
     const calculateRoute = async () => {
       if (waypoints.length < 2) {
         setOsrmRoute([]);
@@ -95,13 +103,13 @@ function App() {
         }
       }
       setOsrmRoute(fullRoute);
+      setGeneratedTrack(null); // reset analytics when route changes
     };
 
     calculateRoute();
-  }, [waypoints, sport, editMode]);
+  }, [waypoints, sport]);
 
   const pushHistory = (newWaypoints: Waypoint[]) => {
-    if (editMode) return;
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(newWaypoints);
     setHistory(newHistory);
@@ -109,17 +117,20 @@ function App() {
   };
 
   const handleMapClick = (latlng: any) => {
-    if (editMode) return;
     const newWaypoint: Waypoint = { lat: latlng.lat, lng: latlng.lng, snapped: isSnapping };
     pushHistory([...waypoints, newWaypoint]);
   }
 
   const handleMarkerClick = (index: number) => {
-    if (editMode) return;
     if (index === 0 && waypoints.length > 2) {
       const firstWP = waypoints[0];
       const newWaypoint: Waypoint = { lat: firstWP.lat, lng: firstWP.lng, snapped: isSnapping };
       pushHistory([...waypoints, newWaypoint]);
+    } else {
+      // Allow deleting marker if clicked again
+      const newWaypoints = [...waypoints];
+      newWaypoints.splice(index, 1);
+      pushHistory(newWaypoints);
     }
   }
 
@@ -127,27 +138,21 @@ function App() {
     setHistory([[]]);
     setHistoryIndex(0);
     setOsrmRoute([]);
-    setEditMode(false);
-    setUploadedTrack([]);
-    setTrimmedTrack([]);
+    setGeneratedTrack(null);
   }
 
   const handleGenerate = async () => {
+    if (osrmRoute.length < 2) {
+      alert("Draw a route first!")
+      return;
+    }
     setIsGenerating(true)
     try {
-      if (editMode) {
-        const tcxData = generateTCX(trimmedTrack, sport)
-        downloadFile(tcxData, `Kalla_Edited_${sport}.tcx`)
-      } else {
-        if (osrmRoute.length < 2) {
-          alert("Draw a route first!")
-          return;
-        }
-        const startDateTime = new Date(startTimeStr);
-        const track = generateActivity(osrmRoute, startDateTime, pace, sport, useRandomStops)
-        const tcxData = generateTCX(track, sport)
-        downloadFile(tcxData, `Kalla_${sport}.tcx`)
-      }
+      const startDateTime = new Date(startTimeStr);
+      const track = await generateActivity(
+        osrmRoute, startDateTime, pace, sport, useRandomStops, pacingStrategy, elevSensitivity, loops
+      );
+      setGeneratedTrack(track);
     } catch (err) {
       console.error(err)
       alert("Error generating activity.")
@@ -156,66 +161,47 @@ function App() {
     }
   }
 
-  // Edit Mode Logic
+  const handleDownload = () => {
+    if (generatedTrack) {
+      const tcxData = generateTCX(generatedTrack, sport, deviceKey);
+      downloadFile(tcxData, `Kalla_${sport}_${deviceKey}.tcx`);
+    }
+  }
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const ext = file.name.split('.').pop()?.toLowerCase();
-    if (ext !== 'tcx' && ext !== 'gpx') {
-      alert("Only .tcx and .gpx supported");
-      return;
-    }
+    if (ext !== 'tcx' && ext !== 'gpx') return alert("Only .tcx and .gpx supported");
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const xml = event.target?.result as string;
       const parsedTrack = parseActivityFile(xml, ext);
       if (parsedTrack.length > 0) {
-        setUploadedTrack(parsedTrack);
-        setTrimmedTrack(parsedTrack);
-        setEditMode(true);
-        setTrimStart(0);
-        setTrimEnd(100);
+        // Simplify trackpoints into waypoints using basic Douglas-Peucker via Leaflet
+        // Convert to Leaflet Points for simplification (treating lat/lng as x/y)
+        const pts = parsedTrack.map(p => L.point(p.lat, p.lng));
+        const tolerance = 0.001; // roughly 100m
+        const simplifiedPts = L.LineUtil.simplify(pts, tolerance);
         
-        const distKm = parsedTrack[parsedTrack.length-1].distance / 1000;
-        const timeSecs = (new Date(parsedTrack[parsedTrack.length-1].time).getTime() - new Date(parsedTrack[0].time).getTime()) / 1000;
-        if (distKm > 0) {
-           setEditPace(parseFloat((timeSecs / 60 / distKm).toFixed(2)));
-        }
+        const importedWaypoints = simplifiedPts.map(p => ({
+          lat: p.x, lng: p.y, snapped: false
+        }));
+        
+        pushHistory(importedWaypoints);
+        setGeneratedTrack(null);
       }
     };
     reader.readAsText(file);
-    e.target.value = ''; // reset
+    e.target.value = ''; 
   }
-
-  const applyTrim = (startPct: number, endPct: number) => {
-    setTrimStart(startPct);
-    setTrimEnd(endPct);
-    const startIdx = Math.floor((startPct / 100) * uploadedTrack.length);
-    const endIdx = Math.ceil((endPct / 100) * uploadedTrack.length);
-    setTrimmedTrack(uploadedTrack.slice(startIdx, endIdx));
-  }
-
-  const handleReverse = () => {
-    const reversed = reverseTrack(trimmedTrack);
-    setUploadedTrack(reversed);
-    setTrimmedTrack(reversed);
-    setTrimStart(0);
-    setTrimEnd(100);
-  }
-
-  const handleApplyPace = () => {
-    const adjusted = adjustSpeed(trimmedTrack, editPace);
-    setTrimmedTrack(adjusted);
-  }
-
-  const displayRoute = editMode ? trimmedTrack.map(t => ({lat: t.lat, lng: t.lng})) : osrmRoute;
 
   return (
-    <div className="app-layout">
+    <div className="app-layout" style={{ display: 'flex' }}>
       {/* Map Background */}
-      <MapContainer center={[-6.2088, 106.8456]} zoom={13} zoomControl={false}>
+      <MapContainer center={[-6.2088, 106.8456]} zoom={13} zoomControl={false} style={{ flex: 1 }}>
         <LayersControl position="bottomright">
           <LayersControl.BaseLayer checked name="OpenStreetMap">
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
@@ -224,108 +210,110 @@ function App() {
             <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
           </LayersControl.BaseLayer>
         </LayersControl>
+        
         <GeocoderControl />
         <MapClickHandler onClick={handleMapClick} />
+        {osrmRoute.length > 0 && <MapBoundsController route={osrmRoute} />}
         
-        {!editMode && waypoints.map((wp, i) => (
+        {waypoints.map((wp, i) => (
           <Marker key={i} position={wp} eventHandlers={{ click: () => handleMarkerClick(i) }} />
         ))}
-        {displayRoute.length > 0 && (
-          <Polyline positions={displayRoute} color={editMode ? "#2563eb" : "#09090b"} weight={4} opacity={0.8} />
+        {osrmRoute.length > 0 && (
+          <Polyline positions={osrmRoute} color="#09090b" weight={4} opacity={0.8} />
         )}
       </MapContainer>
 
       {/* Floating Control Panel */}
-      <div className="control-panel glass-panel">
+      <div className="control-panel glass-panel" style={{ width: '420px', overflowY: 'auto', maxHeight: '100vh', margin: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px' }}>Kalla</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Realistic Sports Activity Generator</p>
+          <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px' }}>Kalla Realism</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Advanced Spoofing Dashboard</p>
         </div>
 
-        <div style={{ marginTop: '8px' }}>
+        <div style={{ marginTop: '12px' }}>
           <label className="btn-secondary" style={{ display: 'block', textAlign: 'center', width: '100%' }}>
-            Upload GPX/TCX
+            Upload GPX/TCX (Edit Route)
             <input type="file" accept=".gpx,.tcx" style={{ display: 'none' }} onChange={handleFileUpload} />
           </label>
         </div>
 
-        {editMode ? (
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', marginTop: '8px' }}>
-            <h3 style={{ fontSize: '16px', marginBottom: '12px' }}>Edit Mode</h3>
-            
-            <div style={{ marginBottom: '12px' }}>
-               <label style={{ fontSize: '12px' }}>Trim Start ({trimStart}%)</label>
-               <input type="range" min="0" max="100" value={trimStart} onChange={(e) => applyTrim(Number(e.target.value), trimEnd)} style={{width: '100%'}} />
-               <label style={{ fontSize: '12px' }}>Trim End ({trimEnd}%)</label>
-               <input type="range" min="0" max="100" value={trimEnd} onChange={(e) => applyTrim(trimStart, Number(e.target.value))} style={{width: '100%'}} />
-            </div>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+          <button className="btn-secondary" onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0} style={{ flex: 1, padding: '8px' }}>Undo</button>
+          <button className="btn-secondary" onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1} style={{ flex: 1, padding: '8px' }}>Redo</button>
+        </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginBottom: '12px' }}>
-              <button className="btn-secondary" onClick={handleReverse}>Reverse Route</button>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-              <input type="number" step="0.1" value={editPace} onChange={(e) => setEditPace(parseFloat(e.target.value))} style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid var(--border-color)'}} />
-              <button className="btn-secondary" onClick={handleApplyPace}>Apply Pace</button>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating}>
-                {isGenerating ? 'Generating...' : 'Export Edited TCX'}
-              </button>
-              <button className="btn-secondary" onClick={handleClear}>Exit Edit Mode</button>
-            </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+          <div>
+              <label style={{ fontSize: '12px', fontWeight: '500' }}>Sport Type</label>
+              <select value={sport} onChange={(e) => setSport(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
+                <option value="Running">Running</option>
+                <option value="Walking">Walking</option>
+                <option value="Biking">Biking</option>
+              </select>
           </div>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: '500' }}>Target Pace / Speed</label>
+            <input type="number" step="0.1" value={pace} onChange={(e) => setPace(parseFloat(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+          </div>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: '500' }}>Pacing Strategy</label>
+            <select value={pacingStrategy} onChange={(e) => setPacingStrategy(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
+              <option value="Flat">Flat / Steady</option>
+              <option value="Progression">Progression</option>
+              <option value="Negative Split">Negative Split</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: '500' }}>Loops (Laps)</label>
+            <input type="number" min="1" value={loops} onChange={(e) => setLoops(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+          </div>
+        </div>
+
+        <div style={{ marginTop: '12px' }}>
+           <label style={{ fontSize: '12px', fontWeight: '500' }}>Device Spoofing (Creator)</label>
+           <select value={deviceKey} onChange={(e) => setDeviceKey(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
+             {Object.entries(DEVICES).map(([k, d]) => (
+               <option key={k} value={k}>{d.name}</option>
+             ))}
+           </select>
+        </div>
+
+        <div style={{ marginTop: '12px' }}>
+           <label style={{ fontSize: '12px', fontWeight: '500' }}>Start Time</label>
+           <input type="datetime-local" value={startTimeStr} onChange={(e) => setStartTimeStr(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input type="checkbox" id="snapToggle" checked={isSnapping} onChange={(e) => setIsSnapping(e.target.checked)} />
+            <label htmlFor="snapToggle" style={{ fontSize: '14px', cursor: 'pointer' }}>Snap to Roads</label>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input type="checkbox" id="stopsToggle" checked={useRandomStops} onChange={(e) => setUseRandomStops(e.target.checked)} />
+            <label htmlFor="stopsToggle" style={{ fontSize: '14px', cursor: 'pointer' }}>Simulate Stops</label>
+          </div>
+        </div>
+
+        {!generatedTrack ? (
+          <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2} style={{ marginTop: '12px' }}>
+            {isGenerating ? 'Simulating Physics...' : 'Generate Analytics'}
+          </button>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn-secondary" onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0} style={{ flex: 1, padding: '8px' }}>Undo</button>
-              <button className="btn-secondary" onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1} style={{ flex: 1, padding: '8px' }}>Redo</button>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                 <label style={{ fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px' }}>Sport Type</label>
-                 <select value={sport} onChange={(e) => setSport(e.target.value as any)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none' }}>
-                   <option value="Running">Running</option>
-                   <option value="Walking">Walking</option>
-                   <option value="Biking">Biking</option>
-                 </select>
-              </div>
-              <div>
-                <label style={{ fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px' }}>Target Pace</label>
-                <input type="number" step="0.1" value={pace} onChange={(e) => setPace(parseFloat(e.target.value))} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none' }} />
-              </div>
-            </div>
-
-            <div>
-               <label style={{ fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px' }}>Start Time</label>
-               <input type="datetime-local" value={startTimeStr} onChange={(e) => setStartTimeStr(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontFamily: 'inherit' }} />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input type="checkbox" id="snapToggle" checked={isSnapping} onChange={(e) => setIsSnapping(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
-              <label htmlFor="snapToggle" style={{ fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>Snap to Roads</label>
-            </div>
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input type="checkbox" id="stopsToggle" checked={useRandomStops} onChange={(e) => setUseRandomStops(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
-              <label htmlFor="stopsToggle" style={{ fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>Simulate Random Stops</label>
-            </div>
-            
-            <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2} style={{ marginTop: '8px' }}>
-              {isGenerating ? 'Generating...' : 'Generate TCX'}
-            </button>
-            <button className="btn-secondary" onClick={handleClear}>Clear Route</button>
-            
-            <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-              <p>Waypoints: {waypoints.length} | Nodes: {osrmRoute.length}</p>
-            </div>
+          <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+            <button className="btn-primary" onClick={handleDownload} style={{ flex: 1 }}>Download TCX</button>
+            <button className="btn-secondary" onClick={() => setGeneratedTrack(null)} style={{ flex: 1 }}>Re-generate</button>
           </div>
         )}
+
+        <button className="btn-secondary" onClick={handleClear} style={{ marginTop: '8px', width: '100%' }}>Clear Map</button>
+
+        {generatedTrack && <Dashboard track={generatedTrack} sport={sport} />}
+        
+        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <p>Waypoints: {waypoints.length} | Nodes: {osrmRoute.length * loops}</p>
+        </div>
       </div>
     </div>
   )
 }
-
-export default App

@@ -1,4 +1,4 @@
-import { TrackPoint } from './realism-engine';
+import type { TrackPoint } from './realism-engine';
 import { getDistance } from './geo';
 
 export function parseActivityFile(xmlString: string, extension: string): TrackPoint[] {
