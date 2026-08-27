@@ -1,4 +1,4 @@
-import { TrackPoint } from './realism-engine';
+import type { TrackPoint } from './realism-engine';
 
 export function generateTCX(track: TrackPoint[], sport: string = 'Running'): string {
   const startTime = track[0].time;
