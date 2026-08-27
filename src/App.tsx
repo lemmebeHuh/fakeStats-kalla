@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { MapContainer, TileLayer, useMapEvents, Polyline, Marker, LayersControl, useMap } from 'react-leaflet'
 import { fetchOSRMRoute } from './lib/osrm'
-import { generateActivity, TrackPoint, PacingStrategy } from './lib/realism-engine'
+import { generateActivity, type TrackPoint, type PacingStrategy } from './lib/realism-engine'
 import { generateTCX, downloadFile, DEVICES } from './lib/tcx-generator'
 import { parseActivityFile } from './lib/xml-parser'
 import Dashboard from './components/Dashboard'
@@ -71,7 +71,7 @@ export default function App() {
   const [loops, setLoops] = useState(1)
   const [pacingStrategy, setPacingStrategy] = useState<PacingStrategy>('Flat')
   const [deviceKey, setDeviceKey] = useState<keyof typeof DEVICES>('garmin945')
-  const [elevSensitivity, setElevSensitivity] = useState(1.0)
+  const [elevSensitivity] = useState(1.0)
 
   const waypoints = history[historyIndex];
 

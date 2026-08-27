@@ -37,43 +37,43 @@ export function generateTCX(track: TrackPoint[], sport: string = 'Running', devi
               <LatitudeDegrees>${tp.lat.toFixed(7)}</LatitudeDegrees>
               <LongitudeDegrees>${tp.lng.toFixed(7)}</LongitudeDegrees>
             </Position>
-            ${tp.elevation !== undefined ? \`<AltitudeMeters>\${tp.elevation.toFixed(1)}</AltitudeMeters>\` : ''}
+            ${tp.elevation !== undefined ? `<AltitudeMeters>${tp.elevation.toFixed(1)}</AltitudeMeters>` : ''}
             <DistanceMeters>${tp.distance.toFixed(2)}</DistanceMeters>
             <HeartRateBpm>
               <Value>${tp.hr}</Value>
             </HeartRateBpm>
-            ${sport === 'Biking' && tp.cadence ? \`<Cadence>\${tp.cadence}</Cadence>\` : ''}
+            ${sport === 'Biking' && tp.cadence ? `<Cadence>${tp.cadence}</Cadence>` : ''}
             <Extensions>
               <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
-                ${tp.power ? \`<Watts>\${tp.power}</Watts>\` : ''}
-                ${sport !== 'Biking' && tp.cadence ? \`<RunCadence>\${Math.round(tp.cadence / 2)}</RunCadence>\` : ''}
+                ${tp.power ? `<Watts>${tp.power}</Watts>` : ''}
+                ${sport !== 'Biking' && tp.cadence ? `<RunCadence>${Math.round(tp.cadence / 2)}</RunCadence>` : ''}
               </TPX>
             </Extensions>
           </Trackpoint>`).join('');
 
-  return \`<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-8"?>
 <TrainingCenterDatabase 
   xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2 http://www.garmin.com/xmlschemas/TrainingCenterDatabasev2.xsd"
 >
   <Activities>
-    <Activity Sport="\${sport}">
-      <Id>\${startTime}</Id>
-      <Lap StartTime="\${startTime}">
-        <TotalTimeSeconds>\${totalTimeSeconds.toFixed(1)}</TotalTimeSeconds>
-        <DistanceMeters>\${totalDistance.toFixed(2)}</DistanceMeters>
+    <Activity Sport="${sport}">
+      <Id>${startTime}</Id>
+      <Lap StartTime="${startTime}">
+        <TotalTimeSeconds>${totalTimeSeconds.toFixed(1)}</TotalTimeSeconds>
+        <DistanceMeters>${totalDistance.toFixed(2)}</DistanceMeters>
         <Calories>450</Calories>
         <Intensity>Active</Intensity>
         <TriggerMethod>Manual</TriggerMethod>
         <Track>
-\${trackpointsXML}
+${trackpointsXML}
         </Track>
       </Lap>
       <Creator xsi:type="Device_t">
-        <Name>\${device.name}</Name>
+        <Name>${device.name}</Name>
         <UnitId>3311990000</UnitId>
-        <ProductID>\${device.productId}</ProductID>
+        <ProductID>${device.productId}</ProductID>
         <Version>
           <VersionMajor>11</VersionMajor>
           <VersionMinor>60</VersionMinor>
@@ -83,7 +83,7 @@ export function generateTCX(track: TrackPoint[], sport: string = 'Running', devi
       </Creator>
     </Activity>
   </Activities>
-</TrainingCenterDatabase>\`;
+</TrainingCenterDatabase>`;
 }
 
 export function downloadFile(content: string, filename: string, type: string = 'application/xml') {

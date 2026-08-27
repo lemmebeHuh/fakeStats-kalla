@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import type { TrackPoint } from '../lib/realism-engine';
 
