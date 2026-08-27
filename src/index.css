@@ -154,6 +154,47 @@ button {
   background-color: var(--bg-primary);
 }
 
+/* Floating Drawing Toolbar */
+.floating-toolbar {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.floating-btn-group {
+  display: flex;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.floating-btn-group button {
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  border-right: 1px solid var(--border-color);
+  padding: 8px 12px;
+  border-radius: 0;
+  font-size: 12px;
+}
+.floating-btn-group button:last-child {
+  border-right: none;
+}
+.floating-btn-group button.active {
+  background: var(--accent-color);
+  color: white;
+}
+.floating-btn-group button:disabled {
+  opacity: 0.3;
+}
+
 /* Control Panel */
 .control-panel {
   position: absolute;

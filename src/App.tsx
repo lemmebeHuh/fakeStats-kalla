@@ -347,6 +347,20 @@ export default function App() {
         )}
       </MapContainer>
 
+      {appMode === 'draw' && (
+        <div className="floating-toolbar">
+          <div className="floating-btn-group">
+            <button className={drawMode === 'click' ? 'active' : ''} onClick={() => setDrawMode('click')}>👆 Tap/Click</button>
+            <button className={drawMode === 'freehand' ? 'active' : ''} onClick={() => setDrawMode('freehand')}>✍️ Freehand</button>
+          </div>
+          <div className="floating-btn-group">
+            <button onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0}>↩ Undo</button>
+            <button onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1}>Redo ↪</button>
+            <button onClick={handleClear} style={{ color: '#ef4444' }}>🗑️ Clear</button>
+          </div>
+        </div>
+      )}
+
       {/* Floating Control Panel */}
       <div className={`control-panel solid-panel ${!isPanelExpanded ? 'collapsed' : ''}`}>
         <div className="panel-drag-handle" onClick={() => setIsPanelExpanded(!isPanelExpanded)}></div>
@@ -376,37 +390,16 @@ export default function App() {
         )}
 
         {appMode === 'draw' && (
-          <>
-            <div style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '6px', borderRadius: '12px' }}>
-              <button 
-                style={{ flex: 1, padding: '8px', borderRadius: '8px', background: drawMode === 'click' ? '#fc4c02' : 'transparent', color: drawMode === 'click' ? '#fff' : 'var(--text-secondary)' }} 
-                onClick={() => setDrawMode('click')}>
-                Tap/Click
-              </button>
-              <button 
-                style={{ flex: 1, padding: '8px', borderRadius: '8px', background: drawMode === 'freehand' ? '#fc4c02' : 'transparent', color: drawMode === 'freehand' ? '#fff' : 'var(--text-secondary)' }} 
-                onClick={() => setDrawMode('freehand')}>
-                Freehand (Draw)
-              </button>
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>Auto Loops (Target Distance)</label>
+            <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+              {[5, 10, 21, 42, 50, 100].map(km => (
+                <button key={km} className="btn-secondary" style={{ flex: 1, padding: '6px 0', fontSize: '12px' }} onClick={() => setQuickDistance(km)}>
+                  {km}K
+                </button>
+              ))}
             </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn-secondary" onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0} style={{ flex: 1 }}>↩ Undo</button>
-              <button className="btn-secondary" onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1} style={{ flex: 1 }}>Redo ↪</button>
-              <button className="btn-secondary" onClick={handleClear} style={{ flex: 1, color: '#ef4444' }}>Clear</button>
-            </div>
-            
-            <div>
-              <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>Auto Loops (Target Distance)</label>
-              <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
-                {[5, 10, 21, 42, 50, 100].map(km => (
-                  <button key={km} className="btn-secondary" style={{ flex: 1, padding: '6px 0', fontSize: '12px' }} onClick={() => setQuickDistance(km)}>
-                    {km}K
-                  </button>
-                ))}
-              </div>
-            </div>
-          </>
+          </div>
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
