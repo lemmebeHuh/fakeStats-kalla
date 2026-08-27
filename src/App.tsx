@@ -3,7 +3,8 @@ import { MapContainer, TileLayer, useMapEvents, Polyline, Marker, LayersControl,
 import { MousePointer2, PenTool, Undo2, Redo2, Trash2, Lock, Unlock, Upload, Settings2, Download, RefreshCw, Route, Zap } from 'lucide-react'
 import { fetchOSRMRoute } from './lib/osrm'
 import { generateActivity, type TrackPoint, type PacingStrategy } from './lib/realism-engine'
-import { generateTCX, downloadFile, DEVICES } from './lib/tcx-generator'
+import { generateTCX, generateGPX, downloadFile, DEVICES } from './lib/tcx-generator'
+
 import { parseActivityFile } from './lib/xml-parser'
 import Dashboard from './components/Dashboard'
 import L from 'leaflet'
@@ -167,12 +168,11 @@ export default function App() {
   // Premium States
   const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(false)
   const [showPremiumModal, setShowPremiumModal] = useState(false)
+  const [showDownloadModal, setShowDownloadModal] = useState(false)
   const [secretBypass, setSecretBypass] = useState('')
 
   useEffect(() => {
-    // Secret bypass check: count occurrences of "sangkalaaji"
-    const count = (secretBypass.match(/sangkalaaji/gi) || []).length;
-    if (count >= 10) {
+    if (secretBypass.toLowerCase().includes("otak selangkangan, pikiran koruptor.")) {
       setIsPremiumUnlocked(true);
       setShowPremiumModal(false);
       setSecretBypass('');
@@ -290,33 +290,53 @@ export default function App() {
     setGeneratedTrack(null);
   }
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     if (osrmRoute.length < 2) {
       alert("Draw a route first!")
       return;
     }
     setIsGenerating(true)
-    try {
+    setTimeout(async () => {
+      import('./lib/firebase').then(m => m.logGenerateEvent());
       const startDateTime = new Date(startTimeStr);
       const paceDecimal = sport === 'Biking' ? (60 / speedKmh) : (paceMin + paceSec / 60);
       
-      const track = await generateActivity(
-        osrmRoute, startDateTime, paceDecimal, sport, useRandomStops, pacingStrategy, 1.0, loops, includeHR, includePowerCadence, targetHR, gpsAccuracy
-      );
-      setGeneratedTrack(track);
-    } catch (err) {
-      console.error(err)
-      alert("Error generating activity.")
-    } finally {
+      try {
+        const act = await generateActivity(
+          osrmRoute, 
+          startDateTime, 
+          paceDecimal, 
+          sport, 
+          useRandomStops, 
+          pacingStrategy, 
+          1.0, 
+          loops, 
+          isPremiumUnlocked ? includeHR : false, 
+          isPremiumUnlocked ? includePowerCadence : false, 
+          isPremiumUnlocked ? targetHR : 130, 
+          gpsAccuracy
+        );
+        setGeneratedTrack(act);
+      } catch (err) {
+        console.error(err);
+        alert("Error generating activity.");
+      }
       setIsGenerating(false)
-    }
+    }, 500)
   }
 
-  const handleDownload = () => {
-    if (generatedTrack) {
-      const tcxData = generateTCX(generatedTrack, sport, deviceKey);
-      downloadFile(tcxData, `Kalla_${sport}_${deviceKey}.tcx`);
-    }
+  const handleDownloadTCX = () => {
+    if (!generatedTrack) return;
+    import('./lib/firebase').then(m => m.logDownloadEvent());
+    const tcx = generateTCX(generatedTrack, isPremiumUnlocked ? deviceKey : 'generic');
+    downloadFile(tcx, 'fake_activity.tcx', 'application/xml');
+  }
+
+  const handleDownloadGPX = () => {
+    if (!generatedTrack) return;
+    import('./lib/firebase').then(m => m.logDownloadEvent());
+    const gpx = generateGPX(generatedTrack, isPremiumUnlocked ? deviceKey : 'generic');
+    downloadFile(gpx, 'fake_activity.gpx', 'application/gpx+xml');
   }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -576,8 +596,8 @@ export default function App() {
             </button>
           ) : (
             <div style={{ display: 'flex', gap: '8px' }}>
-              <button className="btn-primary" onClick={handleDownload} style={{ flex: 1, padding: '16px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                Download TCX <Download size={18} />
+              <button className="btn-primary" onClick={() => setShowDownloadModal(true)} style={{ flex: 1, padding: '16px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                Download <Download size={18} />
               </button>
               <button className="btn-secondary" onClick={() => setGeneratedTrack(null)} style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: '8px' }}>
                 Re-generate <RefreshCw size={18} />
@@ -614,7 +634,7 @@ export default function App() {
             </a>
             
             <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>Atau ketik rahasia "sangkalaaji" 10x di bawah untuk gratis:</p>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>Atau ketik rahasia "otak selangkangan, pikiran koruptor." di bawah untuk gratis:</p>
               <textarea 
                 value={secretBypass} 
                 onChange={e => setSecretBypass(e.target.value)} 
@@ -624,6 +644,33 @@ export default function App() {
             </div>
             
             <button onClick={() => setShowPremiumModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', marginTop: '16px', cursor: 'pointer', fontSize: '14px' }}>
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showDownloadModal && (
+        <div className="modal-overlay" onClick={() => setShowDownloadModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 12px 0', fontSize: '20px' }}>Siap Diunduh!</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>
+              Dukung pengembangan aplikasi ini dengan donasi seikhlasnya.
+            </p>
+            <a href="https://saweria.co/sangkalaaji" target="_blank" rel="noreferrer" style={{ display: 'inline-block', width: '100%', padding: '12px', background: '#fc4c02', color: '#fff', borderRadius: '12px', textDecoration: 'none', fontWeight: 'bold', marginBottom: '16px' }}>
+              Support via Saweria
+            </a>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <button className="btn-primary" onClick={() => { handleDownloadTCX(); setShowDownloadModal(false); }} style={{ padding: '12px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                Download .TCX <Download size={16} />
+              </button>
+              <button className="btn-secondary" onClick={() => { handleDownloadGPX(); setShowDownloadModal(false); }} style={{ padding: '12px', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: '1px solid var(--border-color)' }}>
+                Download .GPX <Download size={16} />
+              </button>
+            </div>
+            
+            <button onClick={() => setShowDownloadModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', marginTop: '24px', cursor: 'pointer', fontSize: '14px' }}>
               Tutup
             </button>
           </div>
