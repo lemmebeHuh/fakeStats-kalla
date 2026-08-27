@@ -63,7 +63,10 @@ export default function App() {
   const [generatedTrack, setGeneratedTrack] = useState<TrackPoint[] | null>(null)
   
   // Customization States
-  const [pace, setPace] = useState(6.5)
+  const [paceMin, setPaceMin] = useState(6)
+  const [paceSec, setPaceSec] = useState(30)
+  const [speedKmh, setSpeedKmh] = useState(25)
+
   const [isSnapping, setIsSnapping] = useState(true)
   const [sport, setSport] = useState<'Running' | 'Walking' | 'Biking'>('Running')
   const [startTimeStr, setStartTimeStr] = useState(getDefaultDateTime())
@@ -111,30 +114,6 @@ export default function App() {
     calculateRoute();
   }, [waypoints, sport]);
 
-  useEffect(() => {
-    if (osrmRoute.length < 2) {
-      setGeneratedTrack(null);
-      return;
-    }
-    
-    const delayDebounceFn = setTimeout(async () => {
-      setIsGenerating(true);
-      try {
-        const startDateTime = new Date(startTimeStr);
-        const track = await generateActivity(
-          osrmRoute, startDateTime, pace, sport, useRandomStops, pacingStrategy, 1.0, loops, includeHR, includePowerCadence
-        );
-        setGeneratedTrack(track);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsGenerating(false);
-      }
-    }, 800);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [osrmRoute, startTimeStr, pace, sport, useRandomStops, pacingStrategy, loops, includeHR, includePowerCadence]);
-
   const pushHistory = (newWaypoints: Waypoint[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(newWaypoints);
@@ -164,6 +143,28 @@ export default function App() {
     setHistoryIndex(0);
     setOsrmRoute([]);
     setGeneratedTrack(null);
+  }
+
+  const handleGenerate = async () => {
+    if (osrmRoute.length < 2) {
+      alert("Draw a route first!")
+      return;
+    }
+    setIsGenerating(true)
+    try {
+      const startDateTime = new Date(startTimeStr);
+      const paceDecimal = sport === 'Biking' ? (60 / speedKmh) : (paceMin + paceSec / 60);
+      
+      const track = await generateActivity(
+        osrmRoute, startDateTime, paceDecimal, sport, useRandomStops, pacingStrategy, 1.0, loops, includeHR, includePowerCadence
+      );
+      setGeneratedTrack(track);
+    } catch (err) {
+      console.error(err)
+      alert("Error generating activity.")
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   const handleDownload = () => {
@@ -255,8 +256,21 @@ export default function App() {
               </select>
           </div>
           <div>
-            <label style={{ fontSize: '12px', fontWeight: '500' }}>Target Pace / Speed</label>
-            <input type="number" step="0.1" value={pace} onChange={(e) => setPace(parseFloat(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+            {sport === 'Biking' ? (
+              <>
+                <label style={{ fontSize: '12px', fontWeight: '500' }}>Target Speed (km/h)</label>
+                <input type="number" step="0.1" value={speedKmh} onChange={(e) => setSpeedKmh(parseFloat(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+              </>
+            ) : (
+              <>
+                <label style={{ fontSize: '12px', fontWeight: '500' }}>Target Pace (min/km)</label>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <input type="number" min="1" max="60" value={paceMin} onChange={(e) => setPaceMin(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} placeholder="Min" />
+                  <span style={{ display: 'flex', alignItems: 'center' }}>:</span>
+                  <input type="number" min="0" max="59" value={paceSec} onChange={(e) => setPaceSec(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} placeholder="Sec" />
+                </div>
+              </>
+            )}
           </div>
           <div>
             <label style={{ fontSize: '12px', fontWeight: '500' }}>Pacing Strategy</label>
@@ -308,14 +322,20 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-          <button className="btn-primary" onClick={handleDownload} disabled={!generatedTrack} style={{ flex: 1 }}>
-            {isGenerating ? 'Simulating...' : 'Download TCX'}
+        {!generatedTrack ? (
+          <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2} style={{ marginTop: '12px', width: '100%' }}>
+            {isGenerating ? 'Simulating Physics...' : 'Generate Analytics'}
           </button>
-          <button className="btn-secondary" onClick={handleClear} style={{ flex: 1 }}>Clear Map</button>
-        </div>
+        ) : (
+          <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+            <button className="btn-primary" onClick={handleDownload} style={{ flex: 1 }}>Download TCX</button>
+            <button className="btn-secondary" onClick={() => setGeneratedTrack(null)} style={{ flex: 1 }}>Re-generate</button>
+          </div>
+        )}
 
-        {generatedTrack && !isGenerating && <Dashboard track={generatedTrack} sport={sport} />}
+        <button className="btn-secondary" onClick={handleClear} style={{ marginTop: '8px', width: '100%' }}>Clear Map</button>
+
+        {generatedTrack && <Dashboard track={generatedTrack} sport={sport} />}
         
         <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
           <p>Waypoints: {waypoints.length} | Nodes: {osrmRoute.length * loops}</p>
