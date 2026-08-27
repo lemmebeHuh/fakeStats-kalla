@@ -7,7 +7,6 @@ import L from 'leaflet'
 import 'leaflet-control-geocoder/dist/Control.Geocoder.css';
 import 'leaflet-control-geocoder';
 
-// Fix Leaflet marker icons
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 let DefaultIcon = L.icon({
@@ -49,18 +48,29 @@ function GeocoderControl() {
   return null;
 }
 
+// Get current datetime string for default input
+const getDefaultDateTime = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+};
+
 function App() {
   const [history, setHistory] = useState<Waypoint[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
   
   const [osrmRoute, setOsrmRoute] = useState<any[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
-  const [pace, setPace] = useState(6.5) // Default 6:30 min/km
+  
+  // Customization States
+  const [pace, setPace] = useState(6.5)
   const [isSnapping, setIsSnapping] = useState(true)
+  const [sport, setSport] = useState<'Running' | 'Walking' | 'Biking'>('Running')
+  const [startTimeStr, setStartTimeStr] = useState(getDefaultDateTime())
+  const [useRandomStops, setUseRandomStops] = useState(false)
 
   const waypoints = history[historyIndex];
 
-  // Recalculate route whenever waypoints change
   useEffect(() => {
     const calculateRoute = async () => {
       if (waypoints.length < 2) {
@@ -76,9 +86,9 @@ function App() {
         const p2 = waypoints[i];
         
         if (p2.snapped) {
-          const segment = await fetchOSRMRoute([p1, p2], 'walking');
+          const profile = sport === 'Biking' ? 'cycling' : 'walking';
+          const segment = await fetchOSRMRoute([p1, p2], profile);
           if (segment && segment.length > 0) {
-            // Remove first point to avoid duplication with previous segment's end
             segment.shift(); 
             fullRoute = [...fullRoute, ...segment];
           } else {
@@ -92,17 +102,28 @@ function App() {
     };
 
     calculateRoute();
-  }, [waypoints]);
+  }, [waypoints, sport]); // Recalculate if sport changes (OSRM profile might change)
 
-  const handleMapClick = (latlng: any) => {
-    const newWaypoint: Waypoint = { lat: latlng.lat, lng: latlng.lng, snapped: isSnapping };
-    const newWaypoints = [...waypoints, newWaypoint];
-    
-    // Update history
+  const pushHistory = (newWaypoints: Waypoint[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(newWaypoints);
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
+  };
+
+  const handleMapClick = (latlng: any) => {
+    const newWaypoint: Waypoint = { lat: latlng.lat, lng: latlng.lng, snapped: isSnapping };
+    pushHistory([...waypoints, newWaypoint]);
+  }
+
+  // Feature: Loop Route
+  const handleMarkerClick = (index: number) => {
+    if (index === 0 && waypoints.length > 2) {
+      // User clicked the first marker, and we have enough points to form a loop
+      const firstWP = waypoints[0];
+      const newWaypoint: Waypoint = { lat: firstWP.lat, lng: firstWP.lng, snapped: isSnapping };
+      pushHistory([...waypoints, newWaypoint]);
+    }
   }
 
   const handleUndo = () => {
@@ -131,9 +152,10 @@ function App() {
     
     setIsGenerating(true)
     try {
-      const track = generateActivity(osrmRoute, new Date(), pace)
-      const tcxData = generateTCX(track, 'Running')
-      downloadFile(tcxData, 'Kalla_Activity.tcx')
+      const startDateTime = new Date(startTimeStr);
+      const track = generateActivity(osrmRoute, startDateTime, pace, sport, useRandomStops)
+      const tcxData = generateTCX(track, sport)
+      downloadFile(tcxData, \`Kalla_\${sport}.tcx\`)
     } catch (err) {
       console.error(err)
       alert("Error generating activity.")
@@ -159,7 +181,7 @@ function App() {
           </LayersControl.BaseLayer>
           <LayersControl.BaseLayer name="Satellite">
             <TileLayer
-              attribution='&copy; Esri &mdash; Source: Esri'
+              attribution='&copy; Esri'
               url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
             />
           </LayersControl.BaseLayer>
@@ -170,7 +192,12 @@ function App() {
         
         {/* Draw Waypoints */}
         {waypoints.map((wp, i) => (
-          <Marker key={i} position={wp} />
+          <Marker 
+            key={i} 
+            position={wp} 
+            eventHandlers={{ click: () => handleMarkerClick(i) }} 
+            title={i === 0 ? "Click to close loop" : ""}
+          />
         ))}
 
         {/* Draw Snapped Route */}
@@ -191,46 +218,63 @@ function App() {
           <button className="btn-secondary" onClick={handleRedo} disabled={historyIndex === history.length - 1} style={{ flex: 1, padding: '8px' }}>Redo</button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-          <input 
-            type="checkbox" 
-            id="snapToggle" 
-            checked={isSnapping} 
-            onChange={(e) => setIsSnapping(e.target.checked)} 
-            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-          />
-          <label htmlFor="snapToggle" style={{ fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>Snap to Roads (OSRM)</label>
-        </div>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '8px' }}>
           <div>
-            <label style={{ fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px' }}>
-              Target Pace (min/km)
-            </label>
+             <label style={{ fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px' }}>Sport Type</label>
+             <select 
+               value={sport} 
+               onChange={(e) => setSport(e.target.value as any)}
+               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none' }}
+             >
+               <option value="Running">Running</option>
+               <option value="Walking">Walking</option>
+               <option value="Biking">Biking</option>
+             </select>
+          </div>
+          <div>
+            <label style={{ fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px' }}>Target Pace</label>
             <input 
-              type="number" 
-              step="0.1"
-              value={pace}
-              onChange={(e) => setPace(parseFloat(e.target.value))}
+              type="number" step="0.1" value={pace} onChange={(e) => setPace(parseFloat(e.target.value))}
               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none' }}
             />
           </div>
+        </div>
+
+        <div>
+           <label style={{ fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px' }}>Start Time</label>
+           <input 
+             type="datetime-local" value={startTimeStr} onChange={(e) => setStartTimeStr(e.target.value)}
+             style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontFamily: 'inherit' }}
+           />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input 
+              type="checkbox" id="snapToggle" checked={isSnapping} onChange={(e) => setIsSnapping(e.target.checked)} 
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+            <label htmlFor="snapToggle" style={{ fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>Snap to Roads (OSRM)</label>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input 
+              type="checkbox" id="stopsToggle" checked={useRandomStops} onChange={(e) => setUseRandomStops(e.target.checked)} 
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+            <label htmlFor="stopsToggle" style={{ fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>Simulate Random Stops</label>
+          </div>
+        </div>
         
-          <button 
-            className="btn-primary" 
-            onClick={handleGenerate}
-            disabled={isGenerating || osrmRoute.length < 2}
-            style={{ opacity: (isGenerating || osrmRoute.length < 2) ? 0.5 : 1 }}
-          >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+          <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2}>
             {isGenerating ? 'Generating...' : 'Generate TCX'}
           </button>
-          
           <button className="btn-secondary" onClick={handleClear}>Clear Route</button>
         </div>
         
-        <div style={{ marginTop: '8px', fontSize: '14px' }}>
-          <p>Waypoints: <strong>{waypoints.length}</strong></p>
-          <p>Route nodes: <strong>{osrmRoute.length}</strong></p>
+        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <p>Waypoints: {waypoints.length} | Nodes: {osrmRoute.length}</p>
         </div>
       </div>
     </div>

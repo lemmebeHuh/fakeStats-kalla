@@ -11,7 +11,9 @@ export interface TrackPoint {
 export function generateActivity(
   routePoints: {lat: number, lng: number}[],
   startTime: Date,
-  averagePaceMinPerKm: number
+  averagePaceMinPerKm: number,
+  sport: 'Running' | 'Walking' | 'Biking' = 'Running',
+  useRandomStops: boolean = false
 ): TrackPoint[] {
   if (routePoints.length < 2) return [];
 
@@ -22,12 +24,23 @@ export function generateActivity(
   // Base speed in meters per second
   const targetSpeedMPS = 1000 / (averagePaceMinPerKm * 60);
 
+  // Setup HR based on sport
+  let baseHR = 140;
+  let maxJitterHR = 50;
+  if (sport === 'Walking') {
+    baseHR = 100;
+    maxJitterHR = 20;
+  } else if (sport === 'Biking') {
+    baseHR = 130;
+    maxJitterHR = 40;
+  }
+
   track.push({
     lat: routePoints[0].lat,
     lng: routePoints[0].lng,
     time: new Date(currentTime).toISOString(),
     distance: 0,
-    hr: 100
+    hr: baseHR - 20 // Warm up HR
   });
 
   for (let i = 1; i < routePoints.length; i++) {
@@ -46,13 +59,17 @@ export function generateActivity(
       const timeTakenSeconds = segmentDist / currentSpeed;
       currentTime += timeTakenSeconds * 1000;
     }
+
+    // Random Stops Simulation
+    if (useRandomStops && Math.random() < 0.02) { // 2% chance per segment (route point) to stop
+      const stopDurationSeconds = Math.floor(Math.random() * 30) + 10; // Stop for 10-40 seconds
+      currentTime += stopDurationSeconds * 1000;
+      // You could push extra trackpoints here representing the stop, but just incrementing time works for FakeStrava basics.
+    }
     
-    // Simple HR logic based on speed variation
-    const baseHR = 140;
-    const hr = Math.round(baseHR + (speedJitter - 1) * 50 + (Math.random() * 4 - 2));
+    const hr = Math.round(baseHR + (speedJitter - 1) * maxJitterHR + (Math.random() * 4 - 2));
 
     track.push({
-      // Add slight GPS Jitter
       lat: p2.lat + (Math.random() - 0.5) * 0.00001,
       lng: p2.lng + (Math.random() - 0.5) * 0.00001,
       time: new Date(currentTime).toISOString(),
