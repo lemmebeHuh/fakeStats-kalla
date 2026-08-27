@@ -3,12 +3,13 @@ import { getFirestore, doc, setDoc, getDoc, increment, updateDoc } from 'firebas
 
 // Todo: Replace with your actual Firebase Config
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyApNJ4cnYHej55HYX_aCoian_8dJZJBLFs",
+  authDomain: "kala-males.firebaseapp.com",
+  projectId: "kala-males",
+  storageBucket: "kala-males.firebasestorage.app",
+  messagingSenderId: "545716143530",
+  appId: "1:545716143530:web:55499f2706bbffe5c857d3",
+  measurementId: "G-WD4288SVL7"
 };
 
 // Initialize Firebase only if config is provided to avoid crashing
