@@ -299,7 +299,7 @@ export default function App() {
       </MapContainer>
 
       {/* Floating Control Panel */}
-      <div className="control-panel glass-panel" style={{ width: '420px', overflowY: 'auto', maxHeight: '100vh', margin: '16px' }}>
+      <div className="control-panel glass-panel">
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '4px' }}>Kalla Realism</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Advanced Activity Spoofing</p>

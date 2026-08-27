@@ -109,16 +109,18 @@ html, body {
 /* Floating Sidebar/BottomSheet */
 .control-panel {
   position: absolute;
-  top: 20px;
-  left: 20px;
-  width: 320px;
-  max-height: calc(100vh - 40px);
+  top: 16px;
+  left: 16px;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
   z-index: 1000;
   display: flex;
   flex-direction: column;
   padding: 24px;
   gap: 16px;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 @media (max-width: 768px) {
@@ -127,10 +129,14 @@ html, body {
     left: 0;
     bottom: 0;
     width: 100%;
-    max-height: 50vh;
+    max-width: 100%;
+    max-height: 55vh;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     border-bottom: none;
     border-left: none;
     border-right: none;
+    padding: 16px;
+    padding-bottom: 24px; /* padding for bottom edge */
+    gap: 12px;
   }
 }
