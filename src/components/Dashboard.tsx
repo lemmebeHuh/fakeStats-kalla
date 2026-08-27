@@ -9,17 +9,16 @@ interface Props {
 export default function Dashboard({ track, sport }: Props) {
   if (!track || track.length === 0) return null;
 
-  // Calculation variables
   let totalDistance = track[track.length - 1].distance;
   let totalTimeMs = new Date(track[track.length - 1].time).getTime() - new Date(track[0].time).getTime();
   
   let movingTimeMs = 0;
   let maxHr = 0;
   let sumHr = 0;
+  let hrCount = 0;
   let maxElev = track[0].elevation || 0;
   let elevGain = 0;
   
-  // Calculate Splits
   const splits: { km: number; paceStr: string; paceSeconds: number; elev: number }[] = [];
   let currentSplitKm = 1;
   let splitStartTime = new Date(track[0].time).getTime();
@@ -32,20 +31,21 @@ export default function Dashboard({ track, sport }: Props) {
     const timeDiff = new Date(p2.time).getTime() - new Date(p1.time).getTime();
     const distDiff = p2.distance - p1.distance;
     
-    // Moving time (threshold: > 0.5 m/s)
     if (distDiff > 0 && (distDiff / (timeDiff / 1000)) > 0.5) {
       movingTimeMs += timeDiff;
     }
 
-    if (p2.hr > maxHr) maxHr = p2.hr;
-    sumHr += p2.hr;
+    if (p2.hr !== undefined) {
+      if (p2.hr > maxHr) maxHr = p2.hr;
+      sumHr += p2.hr;
+      hrCount++;
+    }
     
     const elev = p2.elevation || 0;
     if (elev > maxElev) maxElev = elev;
     const elevDiff = elev - (p1.elevation || 0);
     if (elevDiff > 0) elevGain += elevDiff;
 
-    // Splits logic
     if (p2.distance >= currentSplitKm * 1000 || i === track.length - 1) {
       const splitTimeSec = (new Date(p2.time).getTime() - splitStartTime) / 1000;
       const splitDistKm = (p2.distance - ((currentSplitKm - 1) * 1000)) / 1000;
@@ -75,7 +75,7 @@ export default function Dashboard({ track, sport }: Props) {
     }
   }
 
-  const avgHr = Math.round(sumHr / track.length);
+  const avgHr = hrCount > 0 ? Math.round(sumHr / hrCount) : 0;
   
   const formatTime = (ms: number) => {
     const totalSecs = Math.floor(ms / 1000);
@@ -95,7 +95,6 @@ export default function Dashboard({ track, sport }: Props) {
     return `${mins}:${secs.toString().padStart(2, '0')} /km`;
   };
 
-  // Find fastest split
   let fastestSplit = splits.length > 0 ? splits[0] : null;
   if (sport === 'Biking') {
     fastestSplit = splits.reduce((prev, current) => (prev.paceSeconds < current.paceSeconds ? prev : current), splits[0]);
@@ -103,16 +102,19 @@ export default function Dashboard({ track, sport }: Props) {
     fastestSplit = splits.reduce((prev, current) => (prev.paceSeconds < current.paceSeconds ? prev : current), splits[0]);
   }
 
-  // Downsample chart data
   const maxPoints = 150;
   const step = Math.max(1, Math.floor(track.length / maxPoints));
   const chartData = track.filter((_, i) => i % step === 0).map(tp => ({
     distKm: (tp.distance / 1000).toFixed(2),
     hr: tp.hr,
     elevation: tp.elevation || 0,
-    cadence: tp.cadence || 0,
-    power: tp.power || 0
+    cadence: tp.cadence,
+    power: tp.power
   }));
+
+  const hasHR = chartData.some(d => d.hr !== undefined);
+  const hasCadence = chartData.some(d => d.cadence !== undefined);
+  const hasPower = chartData.some(d => d.power !== undefined);
 
   const StatBox = ({ label, value, sub }: { label: string, value: string, sub?: string }) => (
     <div style={{ background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
@@ -125,7 +127,6 @@ export default function Dashboard({ track, sport }: Props) {
   return (
     <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
       
-      {/* Key Metrics */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
         <StatBox label="Jarak Total" value={`${(totalDistance / 1000).toFixed(2)} km`} />
         <StatBox label="Elevasi Gain" value={`${Math.round(elevGain)} m`} sub={`Maks: ${Math.round(maxElev)} m`} />
@@ -133,11 +134,10 @@ export default function Dashboard({ track, sport }: Props) {
         <StatBox label="Waktu Bergerak" value={formatTime(movingTimeMs)} sub={`Total: ${formatTime(totalTimeMs)}`} />
         <StatBox label="Avg Pace (Bergerak)" value={formatPace(movingTimeMs, totalDistance)} sub={`Total Pace: ${formatPace(totalTimeMs, totalDistance)}`} />
         
-        <StatBox label="Heart Rate" value={`${avgHr} bpm`} sub={`Maks: ${maxHr} bpm`} />
+        {hasHR && <StatBox label="Heart Rate" value={`${avgHr} bpm`} sub={`Maks: ${maxHr} bpm`} />}
         <StatBox label="Split Tercepat" value={fastestSplit ? fastestSplit.paceStr : '-'} sub={`Pada KM ${fastestSplit?.km}`} />
       </div>
 
-      {/* Split Table */}
       <div style={{ background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
         <h3 style={{ fontSize: '16px', marginBottom: '12px', textAlign: 'center' }}>Splits</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', textAlign: 'center', fontWeight: 'bold', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid var(--border-color)' }}>
@@ -158,7 +158,6 @@ export default function Dashboard({ track, sport }: Props) {
         </div>
       </div>
 
-      {/* Charts */}
       <div style={{ background: 'rgba(255, 255, 255, 0.05)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
         <h3 style={{ marginBottom: '16px', fontSize: '16px' }}>Grafik Analisis</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -175,19 +174,21 @@ export default function Dashboard({ track, sport }: Props) {
             </ResponsiveContainer>
           </div>
 
-          <div style={{ height: 120 }}>
-            <p style={{ fontSize: '12px', color: '#ef4444', marginBottom: '4px', fontWeight: 'bold' }}>Heart Rate (bpm)</p>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <XAxis dataKey="distKm" hide />
-                <YAxis domain={['auto', 'auto']} width={30} style={{ fontSize: '10px', fill: 'var(--text-secondary)' }} />
-                <Tooltip contentStyle={{ background: '#000', border: 'none', borderRadius: '8px' }} />
-                <Line type="monotone" dataKey="hr" stroke="#ef4444" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          {hasHR && (
+            <div style={{ height: 120 }}>
+              <p style={{ fontSize: '12px', color: '#ef4444', marginBottom: '4px', fontWeight: 'bold' }}>Heart Rate (bpm)</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <XAxis dataKey="distKm" hide />
+                  <YAxis domain={['auto', 'auto']} width={30} style={{ fontSize: '10px', fill: 'var(--text-secondary)' }} />
+                  <Tooltip contentStyle={{ background: '#000', border: 'none', borderRadius: '8px' }} />
+                  <Line type="monotone" dataKey="hr" stroke="#ef4444" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
 
-          {sport !== 'Walking' && (
+          {hasPower && (
             <div style={{ height: 120 }}>
               <p style={{ fontSize: '12px', color: '#8b5cf6', marginBottom: '4px', fontWeight: 'bold' }}>Power (W)</p>
               <ResponsiveContainer width="100%" height="100%">
@@ -196,6 +197,20 @@ export default function Dashboard({ track, sport }: Props) {
                   <YAxis domain={['auto', 'auto']} width={30} style={{ fontSize: '10px', fill: 'var(--text-secondary)' }} />
                   <Tooltip contentStyle={{ background: '#000', border: 'none', borderRadius: '8px' }} />
                   <Line type="monotone" dataKey="power" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {hasCadence && (
+            <div style={{ height: 120 }}>
+              <p style={{ fontSize: '12px', color: '#f59e0b', marginBottom: '4px', fontWeight: 'bold' }}>Cadence ({sport === 'Biking' ? 'RPM' : 'SPM'})</p>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <XAxis dataKey="distKm" hide />
+                  <YAxis domain={['auto', 'auto']} width={30} style={{ fontSize: '10px', fill: 'var(--text-secondary)' }} />
+                  <Tooltip contentStyle={{ background: '#000', border: 'none', borderRadius: '8px' }} />
+                  <Line type="monotone" dataKey="cadence" stroke="#f59e0b" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

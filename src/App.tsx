@@ -71,7 +71,9 @@ export default function App() {
   const [loops, setLoops] = useState(1)
   const [pacingStrategy, setPacingStrategy] = useState<PacingStrategy>('Flat')
   const [deviceKey, setDeviceKey] = useState<keyof typeof DEVICES>('garmin945')
-  const [elevSensitivity] = useState(1.0)
+  
+  const [includeHR, setIncludeHR] = useState(true)
+  const [includePowerCadence, setIncludePowerCadence] = useState(true)
 
   const waypoints = history[historyIndex];
 
@@ -103,7 +105,7 @@ export default function App() {
         }
       }
       setOsrmRoute(fullRoute);
-      setGeneratedTrack(null); // reset analytics when route changes
+      setGeneratedTrack(null); 
     };
 
     calculateRoute();
@@ -127,7 +129,6 @@ export default function App() {
       const newWaypoint: Waypoint = { lat: firstWP.lat, lng: firstWP.lng, snapped: isSnapping };
       pushHistory([...waypoints, newWaypoint]);
     } else {
-      // Allow deleting marker if clicked again
       const newWaypoints = [...waypoints];
       newWaypoints.splice(index, 1);
       pushHistory(newWaypoints);
@@ -150,7 +151,7 @@ export default function App() {
     try {
       const startDateTime = new Date(startTimeStr);
       const track = await generateActivity(
-        osrmRoute, startDateTime, pace, sport, useRandomStops, pacingStrategy, elevSensitivity, loops
+        osrmRoute, startDateTime, pace, sport, useRandomStops, pacingStrategy, 1.0, loops, includeHR, includePowerCadence
       );
       setGeneratedTrack(track);
     } catch (err) {
@@ -180,10 +181,8 @@ export default function App() {
       const xml = event.target?.result as string;
       const parsedTrack = parseActivityFile(xml, ext);
       if (parsedTrack.length > 0) {
-        // Simplify trackpoints into waypoints using basic Douglas-Peucker via Leaflet
-        // Convert to Leaflet Points for simplification (treating lat/lng as x/y)
         const pts = parsedTrack.map(p => L.point(p.lat, p.lng));
-        const tolerance = 0.001; // roughly 100m
+        const tolerance = 0.001;
         const simplifiedPts = L.LineUtil.simplify(pts, tolerance);
         
         const importedWaypoints = simplifiedPts.map(p => ({
@@ -283,15 +282,25 @@ export default function App() {
            <input type="datetime-local" value={startTimeStr} onChange={(e) => setStartTimeStr(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input type="checkbox" id="snapToggle" checked={isSnapping} onChange={(e) => setIsSnapping(e.target.checked)} />
-            <label htmlFor="snapToggle" style={{ fontSize: '14px', cursor: 'pointer' }}>Snap to Roads</label>
+            <label htmlFor="snapToggle" style={{ fontSize: '12px', cursor: 'pointer' }}>Snap to Roads</label>
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input type="checkbox" id="stopsToggle" checked={useRandomStops} onChange={(e) => setUseRandomStops(e.target.checked)} />
-            <label htmlFor="stopsToggle" style={{ fontSize: '14px', cursor: 'pointer' }}>Simulate Stops</label>
+            <label htmlFor="stopsToggle" style={{ fontSize: '12px', cursor: 'pointer' }}>Simulate Stops</label>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input type="checkbox" id="hrToggle" checked={includeHR} onChange={(e) => setIncludeHR(e.target.checked)} />
+            <label htmlFor="hrToggle" style={{ fontSize: '12px', cursor: 'pointer' }}>Include HR</label>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input type="checkbox" id="pwrToggle" checked={includePowerCadence} onChange={(e) => setIncludePowerCadence(e.target.checked)} />
+            <label htmlFor="pwrToggle" style={{ fontSize: '12px', cursor: 'pointer' }}>Power/Cadence</label>
           </div>
         </div>
 

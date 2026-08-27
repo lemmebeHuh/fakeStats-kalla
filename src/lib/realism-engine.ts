@@ -5,7 +5,7 @@ export interface TrackPoint {
   lng: number;
   time: string;
   distance: number;
-  hr: number;
+  hr?: number;
   elevation?: number;
   cadence?: number;
   power?: number;
@@ -13,14 +13,19 @@ export interface TrackPoint {
 
 export async function fetchElevations(points: {lat: number, lng: number}[]): Promise<number[]> {
   try {
-    const maxSamples = 100;
+    const maxSamples = 500;
     const step = Math.max(1, Math.floor(points.length / maxSamples));
     
     const sampled = points.filter((_, i) => i % step === 0);
-    const lats = sampled.map(p => p.lat.toFixed(5)).join(',');
-    const lngs = sampled.map(p => p.lng.toFixed(5)).join(',');
+    const lats = sampled.map(p => Number(p.lat.toFixed(5)));
+    const lngs = sampled.map(p => Number(p.lng.toFixed(5)));
     
-    const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats}&longitude=${lngs}`);
+    const res = await fetch(`https://api.open-meteo.com/v1/elevation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitude: lats, longitude: lngs })
+    });
+    
     const data = await res.json();
     
     if (data.elevation) {
@@ -61,7 +66,9 @@ export async function generateActivity(
   useRandomStops: boolean = false,
   pacingStrategy: PacingStrategy = 'Flat',
   elevationSensitivity: number = 1.0,
-  loops: number = 1
+  loops: number = 1,
+  includeHR: boolean = true,
+  includePowerCadence: boolean = true
 ): Promise<TrackPoint[]> {
   if (routePoints.length < 2) return [];
 
@@ -89,10 +96,10 @@ export async function generateActivity(
     lng: finalRoutePoints[0].lng,
     time: new Date(currentTime).toISOString(),
     distance: 0,
-    hr: baseHR - 15,
+    hr: includeHR ? (baseHR - 15) : undefined,
     elevation: elevations[0],
-    cadence: sport === 'Biking' ? 80 : (sport === 'Walking' ? 100 : 160),
-    power: sport === 'Biking' ? 100 : 150
+    cadence: includePowerCadence ? (sport === 'Biking' ? 80 : (sport === 'Walking' ? 100 : 160)) : undefined,
+    power: includePowerCadence ? (sport === 'Biking' ? 100 : 150) : undefined
   });
 
   const totalExpectedDist = finalRoutePoints.reduce((acc, p, i) => {
@@ -141,19 +148,25 @@ export async function generateActivity(
     const effort = currentSpeed / targetSpeedMPS;
     const perceivedEffort = (targetSpeedMPS / currentSpeed) * (gradient > 0 ? 1 + gradient*0.1 : 1);
     
-    const hr = Math.round(baseHR * strategyMultiplier + (perceivedEffort - 1) * maxJitterHR + (Math.random() * 4 - 2));
+    let hrVal;
+    if (includeHR) {
+      const hr = Math.round(baseHR * strategyMultiplier + (perceivedEffort - 1) * maxJitterHR + (Math.random() * 4 - 2));
+      hrVal = Math.max(60, Math.min(200, hr));
+    }
     
-    let cadence = 0;
-    let power = 0;
+    let cadenceVal;
+    let powerVal;
     
-    if (sport === 'Running') {
-      cadence = Math.round(160 + (effort - 1) * 20 + Math.random() * 4); 
-      power = Math.round(200 * effort * (gradient > 0 ? 1 + gradient*0.05 : 1) + Math.random() * 10);
-    } else if (sport === 'Biking') {
-      cadence = Math.round(85 + (effort - 1) * 15 + Math.random() * 5); 
-      power = Math.round(150 * effort * (gradient > 0 ? 1 + gradient*0.1 : 1) + Math.random() * 15);
-    } else if (sport === 'Walking') {
-      cadence = Math.round(110 + (effort - 1) * 10 + Math.random() * 2);
+    if (includePowerCadence) {
+      if (sport === 'Running') {
+        cadenceVal = Math.round(160 + (effort - 1) * 20 + Math.random() * 4); 
+        powerVal = Math.round(200 * effort * (gradient > 0 ? 1 + gradient*0.05 : 1) + Math.random() * 10);
+      } else if (sport === 'Biking') {
+        cadenceVal = Math.round(85 + (effort - 1) * 15 + Math.random() * 5); 
+        powerVal = Math.round(150 * effort * (gradient > 0 ? 1 + gradient*0.1 : 1) + Math.random() * 15);
+      } else if (sport === 'Walking') {
+        cadenceVal = Math.round(110 + (effort - 1) * 10 + Math.random() * 2);
+      }
     }
 
     track.push({
@@ -161,10 +174,10 @@ export async function generateActivity(
       lng: p2.lng + (Math.random() - 0.5) * 0.00001,
       time: new Date(currentTime).toISOString(),
       distance: totalDistance,
-      hr: Math.max(60, Math.min(200, hr)),
+      hr: hrVal,
       elevation: elevations[i],
-      cadence,
-      power
+      cadence: cadenceVal,
+      power: powerVal
     });
   }
 

@@ -1,6 +1,10 @@
 import type { TrackPoint } from './realism-engine';
 
 export const DEVICES = {
+  none: {
+    name: 'None',
+    productId: '0'
+  },
   garmin945: {
     name: 'Garmin Forerunner 945',
     productId: '3113'
@@ -11,7 +15,7 @@ export const DEVICES = {
   },
   suunto9: {
     name: 'Suunto 9 Peak',
-    productId: '0' // Suunto doesn't strictly use Garmin IDs but we can mock it
+    productId: '0' 
   },
   corosPace2: {
     name: 'COROS PACE 2',
@@ -39,16 +43,18 @@ export function generateTCX(track: TrackPoint[], sport: string = 'Running', devi
             </Position>
             ${tp.elevation !== undefined ? `<AltitudeMeters>${tp.elevation.toFixed(1)}</AltitudeMeters>` : ''}
             <DistanceMeters>${tp.distance.toFixed(2)}</DistanceMeters>
+            ${tp.hr !== undefined ? `
             <HeartRateBpm>
               <Value>${tp.hr}</Value>
-            </HeartRateBpm>
-            ${sport === 'Biking' && tp.cadence ? `<Cadence>${tp.cadence}</Cadence>` : ''}
+            </HeartRateBpm>` : ''}
+            ${sport === 'Biking' && tp.cadence !== undefined ? `<Cadence>${tp.cadence}</Cadence>` : ''}
+            ${(tp.power !== undefined || (sport !== 'Biking' && tp.cadence !== undefined)) ? `
             <Extensions>
               <TPX xmlns="http://www.garmin.com/xmlschemas/ActivityExtension/v2">
-                ${tp.power ? `<Watts>${tp.power}</Watts>` : ''}
-                ${sport !== 'Biking' && tp.cadence ? `<RunCadence>${Math.round(tp.cadence / 2)}</RunCadence>` : ''}
+                ${tp.power !== undefined ? `<Watts>${tp.power}</Watts>` : ''}
+                ${sport !== 'Biking' && tp.cadence !== undefined ? `<RunCadence>${Math.round(tp.cadence / 2)}</RunCadence>` : ''}
               </TPX>
-            </Extensions>
+            </Extensions>` : ''}
           </Trackpoint>`).join('');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -70,6 +76,7 @@ export function generateTCX(track: TrackPoint[], sport: string = 'Running', devi
 ${trackpointsXML}
         </Track>
       </Lap>
+      ${deviceKey !== 'none' ? `
       <Creator xsi:type="Device_t">
         <Name>${device.name}</Name>
         <UnitId>3311990000</UnitId>
@@ -80,7 +87,7 @@ ${trackpointsXML}
           <BuildMajor>0</BuildMajor>
           <BuildMinor>0</BuildMinor>
         </Version>
-      </Creator>
+      </Creator>` : ''}
     </Activity>
   </Activities>
 </TrainingCenterDatabase>`;
