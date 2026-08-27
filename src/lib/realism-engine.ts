@@ -83,7 +83,9 @@ export async function generateActivity(
   elevationSensitivity: number = 1.0,
   loops: number = 1,
   includeHR: boolean = true,
-  includePowerCadence: boolean = true
+  includePowerCadence: boolean = true,
+  targetHR: number = 140,
+  gpsAccuracy: 'Perfect' | 'Good' | 'Poor' = 'Good'
 ): Promise<TrackPoint[]> {
   if (routePoints.length < 2) return [];
 
@@ -103,7 +105,7 @@ export async function generateActivity(
   
   const targetSpeedMPS = 1000 / (averagePaceMinPerKm * 60);
 
-  let baseHR = sport === 'Biking' ? 120 : (sport === 'Walking' ? 95 : 140);
+  let baseHR = targetHR;
   let maxJitterHR = sport === 'Biking' ? 30 : (sport === 'Walking' ? 15 : 40);
 
   track.push({
@@ -184,9 +186,13 @@ export async function generateActivity(
       }
     }
 
+    let accuracyMultiplier = 0.00001; // Perfect (default)
+    if (gpsAccuracy === 'Good') accuracyMultiplier = 0.00005;
+    if (gpsAccuracy === 'Poor') accuracyMultiplier = 0.0002;
+
     track.push({
-      lat: p2.lat + (Math.random() - 0.5) * 0.00001,
-      lng: p2.lng + (Math.random() - 0.5) * 0.00001,
+      lat: p2.lat + (Math.random() - 0.5) * accuracyMultiplier,
+      lng: p2.lng + (Math.random() - 0.5) * accuracyMultiplier,
       time: new Date(currentTime).toISOString(),
       distance: totalDistance,
       hr: hrVal,

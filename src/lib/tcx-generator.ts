@@ -1,30 +1,18 @@
 import type { TrackPoint } from './realism-engine';
 
 export const DEVICES = {
-  none: {
-    name: 'None',
-    productId: '0'
-  },
-  garmin945: {
-    name: 'Garmin Forerunner 945',
-    productId: '3113'
-  },
-  garminFenix7: {
-    name: 'Garmin Fenix 7',
-    productId: '3900'
-  },
-  suunto9: {
-    name: 'Suunto 9 Peak',
-    productId: '0' 
-  },
-  corosPace2: {
-    name: 'COROS PACE 2',
-    productId: '0'
-  },
-  appleWatch: {
-    name: 'Apple Watch Ultra',
-    productId: '0'
-  }
+  none: { name: 'None', productId: '0' },
+  garmin945: { name: 'Garmin Forerunner 945', productId: '3113' },
+  garminFenix7: { name: 'Garmin Fenix 7', productId: '3900' },
+  garminEdge530: { name: 'Garmin Edge 530', productId: '3121' },
+  suunto9: { name: 'Suunto 9 Peak', productId: '0' },
+  corosPace2: { name: 'COROS PACE 2', productId: '0' },
+  corosApex2: { name: 'COROS APEX 2 Pro', productId: '0' },
+  appleWatch: { name: 'Apple Watch Ultra', productId: '0' },
+  wahooElemnt: { name: 'Wahoo ELEMNT RIVAL', productId: '0' },
+  polarVantage: { name: 'Polar Vantage V2', productId: '0' },
+  amazfitTRex: { name: 'Amazfit T-Rex 2', productId: '0' },
+  igpsport: { name: 'iGPSPORT iGS630', productId: '0' }
 };
 
 export function generateTCX(track: TrackPoint[], sport: string = 'Running', deviceKey: keyof typeof DEVICES = 'garmin945'): string {

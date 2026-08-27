@@ -54,6 +54,27 @@ const getDefaultDateTime = () => {
   return now.toISOString().slice(0, 16);
 };
 
+const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371e3;
+  const φ1 = lat1 * Math.PI/180;
+  const φ2 = lat2 * Math.PI/180;
+  const Δφ = (lat2-lat1) * Math.PI/180;
+  const Δλ = (lon2-lon1) * Math.PI/180;
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+const searchLocation = async (query: string) => {
+  if (!query.trim()) return null;
+  const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+  const data = await res.json();
+  if (data && data.length > 0) {
+    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+  }
+  return null;
+}
+
 export default function App() {
   const [history, setHistory] = useState<Waypoint[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -77,6 +98,13 @@ export default function App() {
   
   const [includeHR, setIncludeHR] = useState(true)
   const [includePowerCadence, setIncludePowerCadence] = useState(true)
+  const [targetHR, setTargetHR] = useState(140)
+  const [gpsAccuracy, setGpsAccuracy] = useState<'Perfect'|'Good'|'Poor'>('Good')
+
+  // Route Search states
+  const [startQuery, setStartQuery] = useState('')
+  const [endQuery, setEndQuery] = useState('')
+  const [isSearchingRoute, setIsSearchingRoute] = useState(false)
 
   const waypoints = history[historyIndex];
 
@@ -107,12 +135,55 @@ export default function App() {
           fullRoute.push({ lat: p2.lat, lng: p2.lng });
         }
       }
+
+      // Close the loop if multiple loops are requested and the route doesn't close itself
+      if (loops > 1 && fullRoute.length > 1) {
+        const first = fullRoute[0];
+        const last = fullRoute[fullRoute.length - 1];
+        if (getDistance(first.lat, first.lng, last.lat, last.lng) > 10) { // more than 10 meters gap
+          const profile = sport === 'Biking' ? 'cycling' : 'walking';
+          const segment = await fetchOSRMRoute([{ lat: last.lat, lng: last.lng }, { lat: first.lat, lng: first.lng }], profile);
+          if (segment && segment.length > 0) {
+            segment.shift();
+            fullRoute = [...fullRoute, ...segment];
+          } else {
+            fullRoute.push({ lat: first.lat, lng: first.lng });
+          }
+        }
+      }
+
       setOsrmRoute(fullRoute);
       setGeneratedTrack(null); 
     };
 
     calculateRoute();
-  }, [waypoints, sport]);
+  }, [waypoints, sport, loops]); // Recalculate if loops change to close route
+
+  const handleRouteSearch = async () => {
+    setIsSearchingRoute(true);
+    const startRes = await searchLocation(startQuery);
+    const endRes = await searchLocation(endQuery);
+    setIsSearchingRoute(false);
+
+    if (startRes && endRes) {
+      pushHistory([
+        { lat: startRes.lat, lng: startRes.lng, snapped: true },
+        { lat: endRes.lat, lng: endRes.lng, snapped: true }
+      ]);
+    } else {
+      alert("Lokasi Start atau End tidak ditemukan!");
+    }
+  }
+
+  const setQuickDistance = (targetKm: number) => {
+    if (osrmRoute.length < 2) return alert("Gambar rute dulu!");
+    let loopDist = 0;
+    for(let i = 1; i < osrmRoute.length; i++){
+       loopDist += getDistance(osrmRoute[i-1].lat, osrmRoute[i-1].lng, osrmRoute[i].lat, osrmRoute[i].lng);
+    }
+    const reqLoops = Math.max(1, Math.ceil((targetKm * 1000) / loopDist));
+    setLoops(reqLoops);
+  }
 
   const pushHistory = (newWaypoints: Waypoint[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
@@ -156,7 +227,7 @@ export default function App() {
       const paceDecimal = sport === 'Biking' ? (60 / speedKmh) : (paceMin + paceSec / 60);
       
       const track = await generateActivity(
-        osrmRoute, startDateTime, paceDecimal, sport, useRandomStops, pacingStrategy, 1.0, loops, includeHR, includePowerCadence
+        osrmRoute, startDateTime, paceDecimal, sport, useRandomStops, pacingStrategy, 1.0, loops, includeHR, includePowerCadence, targetHR, gpsAccuracy
       );
       setGeneratedTrack(track);
     } catch (err) {
@@ -191,7 +262,7 @@ export default function App() {
         const simplifiedPts = L.LineUtil.simplify(pts, tolerance);
         
         const importedWaypoints = simplifiedPts.map(p => ({
-          lat: p.x, lng: p.y, snapped: false
+          lat: p.x, lng: p.y, snapped: true // Auto-snap TCX uploads
         }));
         
         pushHistory(importedWaypoints);
@@ -230,8 +301,20 @@ export default function App() {
       {/* Floating Control Panel */}
       <div className="control-panel glass-panel" style={{ width: '420px', overflowY: 'auto', maxHeight: '100vh', margin: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '8px' }}>Kalla Realism</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Advanced Spoofing Dashboard</p>
+          <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '4px' }}>Kalla Realism</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Advanced Activity Spoofing</p>
+        </div>
+
+        {/* Route Search */}
+        <div style={{ marginTop: '16px', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>Search Route</label>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+            <input type="text" placeholder="Start location..." value={startQuery} onChange={e => setStartQuery(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px' }} />
+            <input type="text" placeholder="End location..." value={endQuery} onChange={e => setEndQuery(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px' }} />
+          </div>
+          <button className="btn-secondary" style={{ width: '100%', fontSize: '12px', padding: '6px' }} onClick={handleRouteSearch} disabled={isSearchingRoute}>
+            {isSearchingRoute ? 'Searching...' : 'Find Route'}
+          </button>
         </div>
 
         <div style={{ marginTop: '12px' }}>
@@ -246,7 +329,19 @@ export default function App() {
           <button className="btn-secondary" onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1} style={{ flex: 1, padding: '8px' }}>Redo</button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+        {/* Quick Targets */}
+        <div style={{ marginTop: '16px' }}>
+          <label style={{ fontSize: '12px', fontWeight: '500' }}>Quick Distance (Auto Loops)</label>
+          <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+            {[5, 10, 21, 42, 50, 100].map(km => (
+              <button key={km} className="btn-secondary" style={{ flex: 1, padding: '4px 0', fontSize: '12px' }} onClick={() => setQuickDistance(km)}>
+                {km}k
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
           <div>
               <label style={{ fontSize: '12px', fontWeight: '500' }}>Sport Type</label>
               <select value={sport} onChange={(e) => setSport(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
@@ -272,6 +367,17 @@ export default function App() {
               </>
             )}
           </div>
+          
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: '500' }}>Target Avg HR (bpm)</label>
+            <input type="number" value={targetHR} onChange={(e) => setTargetHR(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+          </div>
+
+          <div>
+            <label style={{ fontSize: '12px', fontWeight: '500' }}>Loops (Laps)</label>
+            <input type="number" min="1" value={loops} onChange={(e) => setLoops(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+          </div>
+
           <div>
             <label style={{ fontSize: '12px', fontWeight: '500' }}>Pacing Strategy</label>
             <select value={pacingStrategy} onChange={(e) => setPacingStrategy(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
@@ -280,9 +386,14 @@ export default function App() {
               <option value="Negative Split">Negative Split</option>
             </select>
           </div>
+
           <div>
-            <label style={{ fontSize: '12px', fontWeight: '500' }}>Loops (Laps)</label>
-            <input type="number" min="1" value={loops} onChange={(e) => setLoops(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+           <label style={{ fontSize: '12px', fontWeight: '500' }}>GPS Accuracy</label>
+           <select value={gpsAccuracy} onChange={(e) => setGpsAccuracy(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
+             <option value="Perfect">Perfect (Dual-Band)</option>
+             <option value="Good">Good (Phone)</option>
+             <option value="Poor">Poor (City/Forest)</option>
+           </select>
           </div>
         </div>
 
@@ -323,14 +434,20 @@ export default function App() {
         </div>
 
         {!generatedTrack ? (
-          <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2} style={{ marginTop: '12px', width: '100%' }}>
+          <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2} style={{ marginTop: '16px', width: '100%' }}>
             {isGenerating ? 'Simulating Physics...' : 'Generate Analytics'}
           </button>
         ) : (
-          <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+          <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
             <button className="btn-primary" onClick={handleDownload} style={{ flex: 1 }}>Download TCX</button>
             <button className="btn-secondary" onClick={() => setGeneratedTrack(null)} style={{ flex: 1 }}>Re-generate</button>
           </div>
+        )}
+        
+        {generatedTrack && (
+           <a href="https://www.strava.com/upload/select" target="_blank" className="btn-secondary" style={{ display: 'block', textAlign: 'center', marginTop: '8px', textDecoration: 'none', background: '#fc4c02', color: 'white', border: 'none' }}>
+             Upload to Strava
+           </a>
         )}
 
         <button className="btn-secondary" onClick={handleClear} style={{ marginTop: '8px', width: '100%' }}>Clear Map</button>
