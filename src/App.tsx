@@ -93,6 +93,10 @@ export default function App() {
   const [targetHR, setTargetHR] = useState(140)
   const [gpsAccuracy, setGpsAccuracy] = useState<'Perfect'|'Good'|'Poor'>('Good')
 
+  // UI States
+  const [isPanelExpanded, setIsPanelExpanded] = useState(true)
+  const [appMode, setAppMode] = useState<'draw' | 'upload'>('draw')
+
   const waypoints = history[historyIndex];
 
   useEffect(() => {
@@ -269,43 +273,54 @@ export default function App() {
         )}
       </MapContainer>
 
-      {/* Mobile Logo Layer (Detached) */}
-      <div className="mobile-logo">
-        <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#fc4c02', margin: 0 }}>Kalla.</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '11px', margin: 0 }}>Realism Engine</p>
-      </div>
-
       {/* Floating Control Panel */}
-      <div className="control-panel glass-panel">
-        <div className="desktop-logo" style={{ marginBottom: '-8px' }}>
-          <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#fc4c02', margin: 0 }}>Kalla.</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: 0 }}>Advanced Activity Spoofing</p>
+      <div className={`control-panel solid-panel ${!isPanelExpanded ? 'collapsed' : ''}`}>
+        <div className="panel-drag-handle" onClick={() => setIsPanelExpanded(!isPanelExpanded)}></div>
+
+        {/* Tab Selector */}
+        <div style={{ display: 'flex', gap: '8px', background: 'var(--bg-tertiary)', padding: '6px', borderRadius: '12px' }}>
+          <button 
+            style={{ flex: 1, padding: '10px', borderRadius: '8px', background: appMode === 'draw' ? 'var(--bg-primary)' : 'transparent', color: appMode === 'draw' ? 'var(--text-primary)' : 'var(--text-secondary)' }} 
+            onClick={() => setAppMode('draw')}>
+            Draw Route
+          </button>
+          <button 
+            style={{ flex: 1, padding: '10px', borderRadius: '8px', background: appMode === 'upload' ? 'var(--bg-primary)' : 'transparent', color: appMode === 'upload' ? 'var(--text-primary)' : 'var(--text-secondary)' }} 
+            onClick={() => setAppMode('upload')}>
+            Upload File
+          </button>
         </div>
 
-        <div>
-          <label className="btn-secondary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-            <span style={{ marginRight: '8px' }}>📂</span> Upload GPX / TCX
-            <input type="file" accept=".gpx,.tcx" style={{ display: 'none' }} onChange={handleFileUpload} />
-          </label>
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn-secondary" onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0} style={{ flex: 1 }}>↩ Undo</button>
-          <button className="btn-secondary" onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1} style={{ flex: 1 }}>Redo ↪</button>
-          <button className="btn-secondary" onClick={handleClear} style={{ flex: 1, color: '#ef4444' }}>Clear</button>
-        </div>
-
-        {/* Quick Targets */}
-        <div>
-          <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>Auto Loops (Target Distance)</label>
-          <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
-            {[5, 10, 21, 42, 50, 100].map(km => (
-              <button key={km} className="btn-secondary" style={{ flex: 1, padding: '6px 0', fontSize: '12px' }} onClick={() => setQuickDistance(km)}>
-                {km}K
-              </button>
-            ))}
+        {appMode === 'upload' && (
+          <div style={{ padding: '16px', border: '1px dashed var(--border-color)', borderRadius: '12px', textAlign: 'center' }}>
+            <label className="btn-secondary" style={{ display: 'inline-flex', cursor: 'pointer' }}>
+              <span style={{ marginRight: '8px' }}>📂</span> Select GPX / TCX
+              <input type="file" accept=".gpx,.tcx" style={{ display: 'none' }} onChange={handleFileUpload} />
+            </label>
+            <p style={{ marginTop: '12px', fontSize: '11px', color: 'var(--text-secondary)' }}>File will be auto-snapped to roads.</p>
           </div>
-        </div>
+        )}
+
+        {appMode === 'draw' && (
+          <>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn-secondary" onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0} style={{ flex: 1 }}>↩ Undo</button>
+              <button className="btn-secondary" onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1} style={{ flex: 1 }}>Redo ↪</button>
+              <button className="btn-secondary" onClick={handleClear} style={{ flex: 1, color: '#ef4444' }}>Clear</button>
+            </div>
+            
+            <div>
+              <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>Auto Loops (Target Distance)</label>
+              <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
+                {[5, 10, 21, 42, 50, 100].map(km => (
+                  <button key={km} className="btn-secondary" style={{ flex: 1, padding: '6px 0', fontSize: '12px' }} onClick={() => setQuickDistance(km)}>
+                    {km}K
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
