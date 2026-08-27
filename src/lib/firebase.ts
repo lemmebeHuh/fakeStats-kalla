@@ -1,15 +1,15 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, setDoc, getDoc, increment, updateDoc, collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
 
-// Todo: Replace with your actual Firebase Config
+// Firebase config using Environment Variables
 const firebaseConfig = {
-  apiKey: "AIzaSyApNJ4cnYHej55HYX_aCoian_8dJZJBLFs",
-  authDomain: "kala-males.firebaseapp.com",
-  projectId: "kala-males",
-  storageBucket: "kala-males.firebasestorage.app",
-  messagingSenderId: "545716143530",
-  appId: "1:545716143530:web:55499f2706bbffe5c857d3",
-  measurementId: "G-WD4288SVL7"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase only if config is provided to avoid crashing
@@ -17,11 +17,11 @@ let app;
 let db: any = null;
 
 try {
-  if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+  if (firebaseConfig.apiKey) {
     app = initializeApp(firebaseConfig);
     db = getFirestore(app);
   } else {
-    console.warn("Firebase is not configured. Analytics will not be saved.");
+    console.warn("Firebase API Key is missing. Analytics will not be saved.");
   }
 } catch (e) {
   console.error("Firebase init error", e);
