@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, useMapEvents, Polyline, Marker, LayersControl, useMap } from 'react-leaflet'
 import { fetchOSRMRoute } from './lib/osrm'
 import { generateActivity, type TrackPoint, type PacingStrategy } from './lib/realism-engine'
@@ -70,8 +70,9 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
 
 function FreehandDrawer({ isFreehandMode, onFreehandComplete }: { isFreehandMode: boolean, onFreehandComplete: (pts: {lat: number, lng: number}[]) => void }) {
   const map = useMap();
-  const [isDrawing, setIsDrawing] = useState(false);
   const [points, setPoints] = useState<{lat: number, lng: number}[]>([]);
+  const isDrawingRef = useRef(false);
+  const pointsRef = useRef<{lat: number, lng: number}[]>([]);
 
   useEffect(() => {
     if (isFreehandMode) {
@@ -82,23 +83,47 @@ function FreehandDrawer({ isFreehandMode, onFreehandComplete }: { isFreehandMode
     return () => { map.dragging.enable(); }
   }, [isFreehandMode, map]);
 
-  useMapEvents({
-    mousedown: (e) => {
-      if (!isFreehandMode) return;
-      setIsDrawing(true);
-      setPoints([{lat: e.latlng.lat, lng: e.latlng.lng}]);
-    },
-    mousemove: (e) => {
-      if (!isFreehandMode || !isDrawing) return;
-      setPoints(prev => [...prev, {lat: e.latlng.lat, lng: e.latlng.lng}]);
-    },
-    mouseup: () => {
-      if (!isFreehandMode || !isDrawing) return;
-      setIsDrawing(false);
-      onFreehandComplete(points);
+  useEffect(() => {
+    if (!isFreehandMode) return;
+
+    const container = map.getContainer();
+    container.style.touchAction = 'none';
+
+    const onPointerDown = (e: PointerEvent) => {
+      isDrawingRef.current = true;
+      const latlng = map.mouseEventToLatLng(e);
+      pointsRef.current = [{lat: latlng.lat, lng: latlng.lng}];
+      setPoints([...pointsRef.current]);
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isDrawingRef.current) return;
+      const latlng = map.mouseEventToLatLng(e);
+      pointsRef.current.push({lat: latlng.lat, lng: latlng.lng});
+      setPoints([...pointsRef.current]);
+    };
+
+    const onPointerUp = () => {
+      if (!isDrawingRef.current) return;
+      isDrawingRef.current = false;
+      onFreehandComplete(pointsRef.current);
+      pointsRef.current = [];
       setPoints([]);
-    }
-  });
+    };
+
+    container.addEventListener('pointerdown', onPointerDown);
+    container.addEventListener('pointermove', onPointerMove);
+    container.addEventListener('pointerup', onPointerUp);
+    container.addEventListener('pointercancel', onPointerUp);
+
+    return () => {
+      container.style.touchAction = '';
+      container.removeEventListener('pointerdown', onPointerDown);
+      container.removeEventListener('pointermove', onPointerMove);
+      container.removeEventListener('pointerup', onPointerUp);
+      container.removeEventListener('pointercancel', onPointerUp);
+    };
+  }, [isFreehandMode, map, onFreehandComplete]);
 
   if (!isFreehandMode || points.length < 2) return null;
   return <Polyline positions={points} color="#ef4444" weight={4} dashArray="8,8" opacity={0.6} />;
