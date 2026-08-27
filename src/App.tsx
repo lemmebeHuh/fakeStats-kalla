@@ -155,7 +155,7 @@ function App() {
       const startDateTime = new Date(startTimeStr);
       const track = generateActivity(osrmRoute, startDateTime, pace, sport, useRandomStops)
       const tcxData = generateTCX(track, sport)
-      downloadFile(tcxData, \`Kalla_\${sport}.tcx\`)
+      downloadFile(tcxData, `Kalla_${sport}.tcx`)
     } catch (err) {
       console.error(err)
       alert("Error generating activity.")
