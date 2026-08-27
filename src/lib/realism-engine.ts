@@ -20,16 +20,31 @@ export async function fetchElevations(points: {lat: number, lng: number}[]): Pro
     const lats = sampled.map(p => Number(p.lat.toFixed(5)));
     const lngs = sampled.map(p => Number(p.lng.toFixed(5)));
     
-    const res = await fetch(`https://api.open-meteo.com/v1/elevation`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ latitude: lats, longitude: lngs })
-    });
+    const chunkSize = 40;
+    const elevations: number[] = [];
+
+    for (let i = 0; i < lats.length; i += chunkSize) {
+      const chunkLats = lats.slice(i, i + chunkSize).join(',');
+      const chunkLngs = lngs.slice(i, i + chunkSize).join(',');
+      
+      const res = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${chunkLats}&longitude=${chunkLngs}`);
+      
+      if (!res.ok) {
+        console.error("Open-Meteo API Error:", await res.text());
+        continue;
+      }
+      
+      const data = await res.json();
+      if (data.elevation) {
+        if (Array.isArray(data.elevation)) {
+          elevations.push(...data.elevation);
+        } else {
+          elevations.push(data.elevation);
+        }
+      }
+    }
     
-    const data = await res.json();
-    
-    if (data.elevation) {
-      const elevations = data.elevation;
+    if (elevations.length > 0) {
       const result: number[] = [];
       let sampleIdx = 0;
       
