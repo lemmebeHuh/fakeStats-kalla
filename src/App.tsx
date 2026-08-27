@@ -1,9 +1,11 @@
-import { useState } from 'react'
-import { MapContainer, TileLayer, useMapEvents, Polyline, Marker } from 'react-leaflet'
+import { useState, useEffect } from 'react'
+import { MapContainer, TileLayer, useMapEvents, Polyline, Marker, LayersControl } from 'react-leaflet'
 import { fetchOSRMRoute } from './lib/osrm'
 import { generateActivity } from './lib/realism-engine'
 import { generateTCX, downloadFile } from './lib/tcx-generator'
 import L from 'leaflet'
+import 'leaflet-control-geocoder/dist/Control.Geocoder.css';
+import 'leaflet-control-geocoder';
 
 // Fix Leaflet marker icons
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -15,6 +17,8 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
+type Waypoint = { lat: number, lng: number, snapped: boolean };
+
 function MapClickHandler({ onClick }: { onClick: (latlng: any) => void }) {
   useMapEvents({
     click(e) {
@@ -24,23 +28,99 @@ function MapClickHandler({ onClick }: { onClick: (latlng: any) => void }) {
   return null
 }
 
+function GeocoderControl() {
+  const map = useMapEvents({});
+  useEffect(() => {
+    // @ts-ignore
+    const geocoder = L.Control.geocoder({
+      defaultMarkGeocode: false,
+      position: 'topright'
+    })
+    .on('markgeocode', function(e: any) {
+      const bbox = e.geocode.bbox;
+      map.fitBounds(bbox);
+    })
+    .addTo(map);
+
+    return () => {
+      map.removeControl(geocoder);
+    };
+  }, [map]);
+  return null;
+}
+
 function App() {
-  const [waypoints, setWaypoints] = useState<any[]>([])
+  const [history, setHistory] = useState<Waypoint[][]>([[]]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  
   const [osrmRoute, setOsrmRoute] = useState<any[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [pace, setPace] = useState(6.5) // Default 6:30 min/km
+  const [isSnapping, setIsSnapping] = useState(true)
 
-  const handleMapClick = async (latlng: any) => {
-    const newWaypoints = [...waypoints, latlng]
-    setWaypoints(newWaypoints)
-    
-    // Auto-fetch route if more than 1 waypoint
-    if (newWaypoints.length > 1) {
-      const route = await fetchOSRMRoute(newWaypoints, 'walking')
-      if (route) {
-        setOsrmRoute(route)
+  const waypoints = history[historyIndex];
+
+  // Recalculate route whenever waypoints change
+  useEffect(() => {
+    const calculateRoute = async () => {
+      if (waypoints.length < 2) {
+        setOsrmRoute([]);
+        return;
       }
+      
+      let fullRoute: any[] = [];
+      fullRoute.push({ lat: waypoints[0].lat, lng: waypoints[0].lng });
+
+      for (let i = 1; i < waypoints.length; i++) {
+        const p1 = waypoints[i-1];
+        const p2 = waypoints[i];
+        
+        if (p2.snapped) {
+          const segment = await fetchOSRMRoute([p1, p2], 'walking');
+          if (segment && segment.length > 0) {
+            // Remove first point to avoid duplication with previous segment's end
+            segment.shift(); 
+            fullRoute = [...fullRoute, ...segment];
+          } else {
+            fullRoute.push({ lat: p2.lat, lng: p2.lng });
+          }
+        } else {
+          fullRoute.push({ lat: p2.lat, lng: p2.lng });
+        }
+      }
+      setOsrmRoute(fullRoute);
+    };
+
+    calculateRoute();
+  }, [waypoints]);
+
+  const handleMapClick = (latlng: any) => {
+    const newWaypoint: Waypoint = { lat: latlng.lat, lng: latlng.lng, snapped: isSnapping };
+    const newWaypoints = [...waypoints, newWaypoint];
+    
+    // Update history
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newWaypoints);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  }
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      setHistoryIndex(historyIndex - 1);
     }
+  }
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      setHistoryIndex(historyIndex + 1);
+    }
+  }
+
+  const handleClear = () => {
+    setHistory([[]]);
+    setHistoryIndex(0);
+    setOsrmRoute([]);
   }
 
   const handleGenerate = async () => {
@@ -51,13 +131,8 @@ function App() {
     
     setIsGenerating(true)
     try {
-      // 1. Run Realism Engine
       const track = generateActivity(osrmRoute, new Date(), pace)
-      
-      // 2. Generate TCX
       const tcxData = generateTCX(track, 'Running')
-      
-      // 3. Download
       downloadFile(tcxData, 'Kalla_Activity.tcx')
     } catch (err) {
       console.error(err)
@@ -65,11 +140,6 @@ function App() {
     } finally {
       setIsGenerating(false)
     }
-  }
-
-  const handleClear = () => {
-    setWaypoints([])
-    setOsrmRoute([])
   }
 
   return (
@@ -80,10 +150,22 @@ function App() {
         zoom={13} 
         zoomControl={false}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <LayersControl position="bottomright">
+          <LayersControl.BaseLayer checked name="OpenStreetMap">
+            <TileLayer
+              attribution='&copy; OpenStreetMap contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Satellite">
+            <TileLayer
+              attribution='&copy; Esri &mdash; Source: Esri'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
+
+        <GeocoderControl />
         <MapClickHandler onClick={handleMapClick} />
         
         {/* Draw Waypoints */}
@@ -93,7 +175,7 @@ function App() {
 
         {/* Draw Snapped Route */}
         {osrmRoute.length > 0 && (
-          <Polyline positions={osrmRoute} color="#09090b" weight={4} opacity={0.7} />
+          <Polyline positions={osrmRoute} color="#09090b" weight={4} opacity={0.8} />
         )}
       </MapContainer>
 
@@ -104,7 +186,23 @@ function App() {
           <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Realistic Sports Activity Generator</p>
         </div>
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+          <button className="btn-secondary" onClick={handleUndo} disabled={historyIndex === 0} style={{ flex: 1, padding: '8px' }}>Undo</button>
+          <button className="btn-secondary" onClick={handleRedo} disabled={historyIndex === history.length - 1} style={{ flex: 1, padding: '8px' }}>Redo</button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+          <input 
+            type="checkbox" 
+            id="snapToggle" 
+            checked={isSnapping} 
+            onChange={(e) => setIsSnapping(e.target.checked)} 
+            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+          />
+          <label htmlFor="snapToggle" style={{ fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>Snap to Roads (OSRM)</label>
+        </div>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
           <div>
             <label style={{ fontSize: '14px', fontWeight: '500', display: 'block', marginBottom: '4px' }}>
               Target Pace (min/km)
@@ -121,8 +219,8 @@ function App() {
           <button 
             className="btn-primary" 
             onClick={handleGenerate}
-            disabled={isGenerating || waypoints.length < 2}
-            style={{ opacity: (isGenerating || waypoints.length < 2) ? 0.5 : 1 }}
+            disabled={isGenerating || osrmRoute.length < 2}
+            style={{ opacity: (isGenerating || osrmRoute.length < 2) ? 0.5 : 1 }}
           >
             {isGenerating ? 'Generating...' : 'Generate TCX'}
           </button>
@@ -130,12 +228,9 @@ function App() {
           <button className="btn-secondary" onClick={handleClear}>Clear Route</button>
         </div>
         
-        <div style={{ marginTop: '16px', fontSize: '14px' }}>
+        <div style={{ marginTop: '8px', fontSize: '14px' }}>
           <p>Waypoints: <strong>{waypoints.length}</strong></p>
           <p>Route nodes: <strong>{osrmRoute.length}</strong></p>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>
-            Click on the map to add points and build your route.
-          </p>
         </div>
       </div>
     </div>
