@@ -8,7 +8,10 @@ import Dashboard from './components/Dashboard'
 import L from 'leaflet'
 import 'leaflet-control-geocoder/dist/Control.Geocoder.css';
 import 'leaflet-control-geocoder';
+import 'leaflet/dist/leaflet.css';
 
+// Fix leaflet default icon issue
+delete (L.Icon.Default.prototype as any)._getIconUrl;
 import icon from 'leaflet/dist/images/marker-icon.png';
 import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 let DefaultIcon = L.icon({
@@ -65,7 +68,41 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
   return R * c;
 }
 
+function FreehandDrawer({ isFreehandMode, onFreehandComplete }: { isFreehandMode: boolean, onFreehandComplete: (pts: {lat: number, lng: number}[]) => void }) {
+  const map = useMap();
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [points, setPoints] = useState<{lat: number, lng: number}[]>([]);
 
+  useEffect(() => {
+    if (isFreehandMode) {
+      map.dragging.disable();
+    } else {
+      map.dragging.enable();
+    }
+    return () => { map.dragging.enable(); }
+  }, [isFreehandMode, map]);
+
+  useMapEvents({
+    mousedown: (e) => {
+      if (!isFreehandMode) return;
+      setIsDrawing(true);
+      setPoints([{lat: e.latlng.lat, lng: e.latlng.lng}]);
+    },
+    mousemove: (e) => {
+      if (!isFreehandMode || !isDrawing) return;
+      setPoints(prev => [...prev, {lat: e.latlng.lat, lng: e.latlng.lng}]);
+    },
+    mouseup: () => {
+      if (!isFreehandMode || !isDrawing) return;
+      setIsDrawing(false);
+      onFreehandComplete(points);
+      setPoints([]);
+    }
+  });
+
+  if (!isFreehandMode || points.length < 2) return null;
+  return <Polyline positions={points} color="#ef4444" weight={4} dashArray="8,8" opacity={0.6} />;
+}
 
 export default function App() {
   const [history, setHistory] = useState<Waypoint[][]>([[]]);
@@ -96,6 +133,7 @@ export default function App() {
   // UI States
   const [isPanelExpanded, setIsPanelExpanded] = useState(true)
   const [appMode, setAppMode] = useState<'draw' | 'upload'>('draw')
+  const [drawMode, setDrawMode] = useState<'click' | 'freehand'>('click')
 
   const waypoints = history[historyIndex];
 
@@ -168,8 +206,18 @@ export default function App() {
   };
 
   const handleMapClick = (latlng: any) => {
+    if (drawMode !== 'click') return;
     const newWaypoint: Waypoint = { lat: latlng.lat, lng: latlng.lng, snapped: isSnapping };
     pushHistory([...waypoints, newWaypoint]);
+  }
+
+  const handleFreehandComplete = (rawPoints: {lat: number, lng: number}[]) => {
+    if (rawPoints.length < 2) return;
+    const pts = rawPoints.map(p => L.point(p.lat, p.lng));
+    // Simplify heavily so OSRM doesn't complain about too many waypoints
+    const simplifiedPts = L.LineUtil.simplify(pts, 0.0008); 
+    const newWps = simplifiedPts.map(p => ({ lat: p.x, lng: p.y, snapped: isSnapping }));
+    pushHistory([...waypoints, ...newWps]);
   }
 
   const handleMarkerClick = (index: number) => {
@@ -263,6 +311,7 @@ export default function App() {
         
         <GeocoderControl />
         <MapClickHandler onClick={handleMapClick} />
+        <FreehandDrawer isFreehandMode={drawMode === 'freehand'} onFreehandComplete={handleFreehandComplete} />
         {osrmRoute.length > 0 && <MapBoundsController route={osrmRoute} />}
         
         {waypoints.map((wp, i) => (
@@ -303,6 +352,19 @@ export default function App() {
 
         {appMode === 'draw' && (
           <>
+            <div style={{ display: 'flex', gap: '8px', background: 'rgba(255,255,255,0.05)', padding: '6px', borderRadius: '12px' }}>
+              <button 
+                style={{ flex: 1, padding: '8px', borderRadius: '8px', background: drawMode === 'click' ? '#fc4c02' : 'transparent', color: drawMode === 'click' ? '#fff' : 'var(--text-secondary)' }} 
+                onClick={() => setDrawMode('click')}>
+                Tap/Click
+              </button>
+              <button 
+                style={{ flex: 1, padding: '8px', borderRadius: '8px', background: drawMode === 'freehand' ? '#fc4c02' : 'transparent', color: drawMode === 'freehand' ? '#fff' : 'var(--text-secondary)' }} 
+                onClick={() => setDrawMode('freehand')}>
+                Freehand (Draw)
+              </button>
+            </div>
+
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className="btn-secondary" onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0} style={{ flex: 1 }}>↩ Undo</button>
               <button className="btn-secondary" onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1} style={{ flex: 1 }}>Redo ↪</button>

@@ -19,6 +19,10 @@ export default function Dashboard({ track, sport }: DashboardProps) {
     let hrSum = 0;
     let hrCount = 0;
     let maxHr = 0;
+    
+    let cadSum = 0;
+    let cadCount = 0;
+    let maxCad = 0;
 
     const movingThresholdMPS = 0.5;
     let movingTimeMs = 0;
@@ -51,6 +55,12 @@ export default function Dashboard({ track, sport }: DashboardProps) {
         hrSum += p2.hr;
         hrCount++;
         maxHr = Math.max(maxHr, p2.hr);
+      }
+      
+      if (p2.cadence) {
+        cadSum += p2.cadence;
+        cadCount++;
+        maxCad = Math.max(maxCad, p2.cadence);
       }
       
       if (i % Math.ceil(track.length / 100) === 0 || i === track.length - 1) {
@@ -97,6 +107,9 @@ export default function Dashboard({ track, sport }: DashboardProps) {
 
     const hasHR = hrCount > 0;
     const avgHr = hasHR ? Math.round(hrSum / hrCount) : 0;
+    
+    const hasCad = cadCount > 0;
+    const avgCad = hasCad ? Math.round(cadSum / cadCount) : 0;
 
     const avgSpeed = (totalDistance / 1000) / (movingTimeMs / 3600000);
 
@@ -110,6 +123,9 @@ export default function Dashboard({ track, sport }: DashboardProps) {
       hasHR,
       avgHr,
       maxHr,
+      hasCad,
+      avgCad,
+      maxCad,
       chartData,
       splits,
       fastestSplit,
@@ -119,7 +135,7 @@ export default function Dashboard({ track, sport }: DashboardProps) {
 
   if (!stats) return null;
 
-  const { totalDistance, movingTimeMs, elevGain, maxElev, hasHR, avgHr, maxHr, chartData, splits, avgSpeed } = stats;
+  const { totalDistance, movingTimeMs, elevGain, maxElev, hasHR, avgHr, maxHr, hasCad, avgCad, maxCad, chartData, splits, avgSpeed } = stats;
 
   return (
     <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '24px' }}>
@@ -159,6 +175,18 @@ export default function Dashboard({ track, sport }: DashboardProps) {
             <div>
               <p style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Max HR</p>
               <p style={{ fontSize: '18px', fontWeight: '700' }}>{maxHr} <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)' }}>bpm</span></p>
+            </div>
+          </>
+        )}
+        {hasCad && (
+          <>
+            <div>
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Avg Cadence</p>
+              <p style={{ fontSize: '18px', fontWeight: '700' }}>{avgCad} <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)' }}>spm</span></p>
+            </div>
+            <div>
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Max Cadence</p>
+              <p style={{ fontSize: '18px', fontWeight: '700' }}>{maxCad} <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)' }}>spm</span></p>
             </div>
           </>
         )}

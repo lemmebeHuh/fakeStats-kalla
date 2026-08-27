@@ -218,4 +218,8 @@ button {
     border-radius: 2px;
     opacity: 0.5;
   }
+  
+  .leaflet-bottom {
+    bottom: 80px !important;
+  }
 }
