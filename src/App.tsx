@@ -4,9 +4,9 @@ import { MousePointer2, PenTool, Undo2, Redo2, Trash2, Lock, Unlock, Upload, Set
 import { fetchOSRMRoute } from './lib/osrm'
 import { generateActivity, type TrackPoint, type PacingStrategy } from './lib/realism-engine'
 import { generateTCX, generateGPX, downloadFile, DEVICES } from './lib/tcx-generator'
-
 import { parseActivityFile } from './lib/xml-parser'
 import Dashboard from './components/Dashboard'
+import AdminDashboard from './components/AdminDashboard'
 import L from 'leaflet'
 import 'leaflet-control-geocoder/dist/Control.Geocoder.css';
 import 'leaflet-control-geocoder';
@@ -133,6 +133,17 @@ function FreehandDrawer({ isFreehandMode, onFreehandComplete }: { isFreehandMode
 }
 
 export default function App() {
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkHash = () => {
+      setIsAdmin(window.location.hash === '#sangkala-admin');
+    };
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
+  }, []);
+
   const [history, setHistory] = useState<Waypoint[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
   
@@ -327,14 +338,56 @@ export default function App() {
 
   const handleDownloadTCX = () => {
     if (!generatedTrack) return;
-    import('./lib/firebase').then(m => m.logDownloadEvent());
+    import('./lib/firebase').then(m => {
+      m.logDownloadEvent();
+      m.saveActivityLog({
+        createdAt: new Date().toISOString(),
+        osrmRoute,
+        sport,
+        pacingStrategy,
+        paceMin,
+        paceSec,
+        speedKmh,
+        targetHR: isPremiumUnlocked ? targetHR : 130,
+        includeHR: isPremiumUnlocked ? includeHR : false,
+        includePowerCadence: isPremiumUnlocked ? includePowerCadence : false,
+        gpsAccuracy,
+        startTimeStr,
+        loops,
+        useRandomStops,
+        isPremiumUnlocked,
+        deviceKey: isPremiumUnlocked ? deviceKey : 'generic',
+        distance_km: drawnDistance * loops / 1000
+      });
+    });
     const tcx = generateTCX(generatedTrack, isPremiumUnlocked ? deviceKey : 'generic');
     downloadFile(tcx, 'fake_activity.tcx', 'application/xml');
   }
 
   const handleDownloadGPX = () => {
     if (!generatedTrack) return;
-    import('./lib/firebase').then(m => m.logDownloadEvent());
+    import('./lib/firebase').then(m => {
+      m.logDownloadEvent();
+      m.saveActivityLog({
+        createdAt: new Date().toISOString(),
+        osrmRoute,
+        sport,
+        pacingStrategy,
+        paceMin,
+        paceSec,
+        speedKmh,
+        targetHR: isPremiumUnlocked ? targetHR : 130,
+        includeHR: isPremiumUnlocked ? includeHR : false,
+        includePowerCadence: isPremiumUnlocked ? includePowerCadence : false,
+        gpsAccuracy,
+        startTimeStr,
+        loops,
+        useRandomStops,
+        isPremiumUnlocked,
+        deviceKey: isPremiumUnlocked ? deviceKey : 'generic',
+        distance_km: drawnDistance * loops / 1000
+      });
+    });
     const gpx = generateGPX(generatedTrack, isPremiumUnlocked ? deviceKey : 'generic');
     downloadFile(gpx, 'fake_activity.gpx', 'application/gpx+xml');
   }
@@ -365,6 +418,10 @@ export default function App() {
     };
     reader.readAsText(file);
     e.target.value = ''; 
+  }
+
+  if (isAdmin) {
+    return <AdminDashboard />;
   }
 
   return (
