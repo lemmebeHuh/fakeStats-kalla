@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, useMapEvents, Polyline, Marker, LayersControl, useMap } from 'react-leaflet'
-import { MousePointer2, PenTool, Undo2, Redo2, Trash2 } from 'lucide-react'
+import { MousePointer2, PenTool, Undo2, Redo2, Trash2, Lock, Unlock, Upload, Settings2, Download, RefreshCw, Route, Zap } from 'lucide-react'
 import { fetchOSRMRoute } from './lib/osrm'
 import { generateActivity, type TrackPoint, type PacingStrategy } from './lib/realism-engine'
 import { generateTCX, downloadFile, DEVICES } from './lib/tcx-generator'
@@ -144,7 +144,7 @@ export default function App() {
   const [paceSec, setPaceSec] = useState(30)
   const [speedKmh, setSpeedKmh] = useState(25)
 
-  const [isSnapping, setIsSnapping] = useState(true)
+  const [isSnapping] = useState(true)
   const [sport, setSport] = useState<'Running' | 'Walking' | 'Biking'>('Running')
   const [startTimeStr, setStartTimeStr] = useState(getDefaultDateTime())
   const [useRandomStops, setUseRandomStops] = useState(false)
@@ -161,6 +161,23 @@ export default function App() {
   const [isPanelExpanded, setIsPanelExpanded] = useState(true)
   const [appMode, setAppMode] = useState<'draw' | 'upload'>('draw')
   const [drawMode, setDrawMode] = useState<'click' | 'freehand'>('click')
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  
+  // Premium States
+  const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(false)
+  const [showPremiumModal, setShowPremiumModal] = useState(false)
+  const [secretBypass, setSecretBypass] = useState('')
+
+  useEffect(() => {
+    // Secret bypass check: count occurrences of "sangkalaaji"
+    const count = (secretBypass.match(/sangkalaaji/gi) || []).length;
+    if (count >= 10) {
+      setIsPremiumUnlocked(true);
+      setShowPremiumModal(false);
+      setSecretBypass('');
+      alert("Pro Unlocked!");
+    }
+  }, [secretBypass]);
 
   const waypoints = history[historyIndex];
 
@@ -378,7 +395,7 @@ export default function App() {
         <div className="panel-drag-handle" onClick={() => setIsPanelExpanded(!isPanelExpanded)}></div>
 
         {/* Tab Selector */}
-        <div style={{ display: 'flex', gap: '8px', background: 'var(--bg-tertiary)', padding: '6px', borderRadius: '12px' }}>
+        <div style={{ display: 'flex', gap: '8px', background: 'var(--bg-tertiary)', padding: '6px', borderRadius: '12px', marginBottom: '16px' }}>
           <button 
             style={{ flex: 1, padding: '10px', borderRadius: '8px', background: appMode === 'draw' ? 'var(--bg-primary)' : 'transparent', color: appMode === 'draw' ? 'var(--text-primary)' : 'var(--text-secondary)' }} 
             onClick={() => setAppMode('draw')}>
@@ -392,145 +409,206 @@ export default function App() {
         </div>
 
         {appMode === 'upload' && (
-          <div style={{ padding: '16px', border: '1px dashed var(--border-color)', borderRadius: '12px', textAlign: 'center' }}>
-            <label className="btn-secondary" style={{ display: 'inline-flex', cursor: 'pointer' }}>
-              <span style={{ marginRight: '8px' }}>📂</span> Select GPX / TCX
+          <div style={{ padding: '24px', background: 'var(--bg-tertiary)', borderRadius: '12px', textAlign: 'center' }}>
+            <label className="btn-secondary" style={{ display: 'inline-flex', cursor: 'pointer', padding: '12px 24px', borderRadius: '100px' }}>
+              <Upload size={18} style={{ marginRight: '8px' }} /> Select GPX / TCX
               <input type="file" accept=".gpx,.tcx" style={{ display: 'none' }} onChange={handleFileUpload} />
             </label>
-            <p style={{ marginTop: '12px', fontSize: '11px', color: 'var(--text-secondary)' }}>File will be auto-snapped to roads.</p>
+            <p style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>File will be auto-snapped to roads.</p>
           </div>
         )}
 
         {appMode === 'draw' && (
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>Auto Loops (Target Distance)</label>
-            <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
-              {[5, 10, 21, 42, 50, 100].map(km => (
-                <button key={km} className="btn-secondary" style={{ flex: 1, padding: '6px 0', fontSize: '12px' }} onClick={() => setQuickDistance(km)}>
-                  {km}K
-                </button>
-              ))}
+          <div className="settings-group">
+            <div className="settings-item">
+              <div className="settings-item-label">
+                <Route size={16} color="var(--text-secondary)" />
+                Quick Distance
+              </div>
+              <div className="settings-item-value" style={{ gap: '2px', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '60%' }}>
+                {[5, 10, 21, 42].map(km => (
+                  <button key={km} onClick={() => setQuickDistance(km)} style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 8px', fontSize: '12px', color: 'var(--text-primary)' }}>
+                    {km}K
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="settings-item">
+              <div className="settings-item-label">Sport</div>
+              <div className="settings-item-value">
+                <select value={sport} onChange={(e) => setSport(e.target.value as any)}>
+                  <option value="Running">Running</option>
+                  <option value="Walking">Walking</option>
+                  <option value="Biking">Biking</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="settings-item">
+              <div className="settings-item-label">Target Pace/Speed</div>
+              <div className="settings-item-value">
+                {sport === 'Biking' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input type="number" step="0.1" value={speedKmh} onChange={(e) => setSpeedKmh(parseFloat(e.target.value))} style={{ maxWidth: '40px' }} />
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>km/h</span>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input type="number" min="1" max="60" value={paceMin} onChange={(e) => setPaceMin(parseInt(e.target.value))} style={{ maxWidth: '30px' }} />
+                    <span>:</span>
+                    <input type="number" min="0" max="59" value={paceSec} onChange={(e) => setPaceSec(parseInt(e.target.value))} style={{ maxWidth: '30px' }} />
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>/km</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div>
-              <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Sport Type</label>
-              <select value={sport} onChange={(e) => setSport(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
-                <option value="Running">Running</option>
-                <option value="Walking">Walking</option>
-                <option value="Biking">Biking</option>
+        <div className="settings-group">
+          <div className="settings-item" onClick={() => !isPremiumUnlocked && setShowPremiumModal(true)} style={{ cursor: !isPremiumUnlocked ? 'pointer' : 'default' }}>
+            <div className="settings-item-label">
+              {!isPremiumUnlocked ? <Lock size={16} color="#ef4444" /> : <Unlock size={16} color="#10b981" />}
+              Device Spoofing
+            </div>
+            <div className="settings-item-value">
+              <select value={deviceKey} onChange={(e) => setDeviceKey(e.target.value as any)} disabled={!isPremiumUnlocked}>
+                {Object.entries(DEVICES).map(([k, d]) => (
+                  <option key={k} value={k}>{d.name}</option>
+                ))}
               </select>
-          </div>
-          <div>
-            {sport === 'Biking' ? (
-              <>
-                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Target Speed (km/h)</label>
-                <input type="number" step="0.1" value={speedKmh} onChange={(e) => setSpeedKmh(parseFloat(e.target.value))} />
-              </>
-            ) : (
-              <>
-                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Target Pace (min/km)</label>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <input type="number" min="1" max="60" value={paceMin} onChange={(e) => setPaceMin(parseInt(e.target.value))} placeholder="Min" />
-                  <span style={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>:</span>
-                  <input type="number" min="0" max="59" value={paceSec} onChange={(e) => setPaceSec(parseInt(e.target.value))} placeholder="Sec" />
-                </div>
-              </>
-            )}
+            </div>
           </div>
           
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Target Avg HR (bpm)</label>
-            <input type="number" value={targetHR} onChange={(e) => setTargetHR(parseInt(e.target.value))} />
-          </div>
-
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Loops (Laps)</label>
-            <input type="number" min="1" value={loops} onChange={(e) => setLoops(parseInt(e.target.value))} />
-          </div>
-
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Pacing Strategy</label>
-            <select value={pacingStrategy} onChange={(e) => setPacingStrategy(e.target.value as any)}>
-              <option value="Flat">Flat / Steady</option>
-              <option value="Progression">Progression</option>
-              <option value="Negative Split">Negative Split</option>
-            </select>
-          </div>
-
-          <div>
-           <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>GPS Accuracy</label>
-           <select value={gpsAccuracy} onChange={(e) => setGpsAccuracy(e.target.value as any)}>
-             <option value="Perfect">Perfect (Dual-Band)</option>
-             <option value="Good">Good (Phone)</option>
-             <option value="Poor">Poor (City/Forest)</option>
-           </select>
+          <div className="settings-item" onClick={() => !isPremiumUnlocked && setShowPremiumModal(true)} style={{ cursor: !isPremiumUnlocked ? 'pointer' : 'default' }}>
+            <div className="settings-item-label">
+              {!isPremiumUnlocked ? <Lock size={16} color="#ef4444" /> : <Unlock size={16} color="#10b981" />}
+              Target Avg HR (bpm)
+            </div>
+            <div className="settings-item-value">
+              <input type="number" value={targetHR} onChange={(e) => setTargetHR(parseInt(e.target.value))} disabled={!isPremiumUnlocked} style={{ maxWidth: '50px' }} />
+            </div>
           </div>
         </div>
 
-        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <div>
-             <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Device Spoofing</label>
-             <select value={deviceKey} onChange={(e) => setDeviceKey(e.target.value as any)}>
-               {Object.entries(DEVICES).map(([k, d]) => (
-                 <option key={k} value={k}>{d.name}</option>
-               ))}
-             </select>
-          </div>
+        <button 
+          onClick={() => setShowAdvanced(!showAdvanced)} 
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: 'transparent', color: 'var(--text-secondary)', border: 'none', marginBottom: '16px', cursor: 'pointer' }}>
+          <Settings2 size={16} /> {showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
+        </button>
 
-          <div>
-             <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Start Time</label>
-             <input type="datetime-local" value={startTimeStr} onChange={(e) => setStartTimeStr(e.target.value)} />
-          </div>
-        </div>
+        {showAdvanced && (
+          <div className="settings-group">
+            <div className="settings-item">
+              <div className="settings-item-label">Pacing Strategy</div>
+              <div className="settings-item-value">
+                <select value={pacingStrategy} onChange={(e) => setPacingStrategy(e.target.value as any)}>
+                  <option value="Flat">Flat</option>
+                  <option value="Progression">Progression</option>
+                  <option value="Negative Split">Negative Split</option>
+                </select>
+              </div>
+            </div>
+            <div className="settings-item">
+              <div className="settings-item-label">GPS Accuracy</div>
+              <div className="settings-item-value">
+                <select value={gpsAccuracy} onChange={(e) => setGpsAccuracy(e.target.value as any)}>
+                  <option value="Perfect">Perfect (Dual-Band)</option>
+                  <option value="Good">Good (Phone)</option>
+                  <option value="Poor">Poor (City)</option>
+                </select>
+              </div>
+            </div>
+            <div className="settings-item">
+              <div className="settings-item-label">Start Time</div>
+              <div className="settings-item-value">
+                <input type="datetime-local" value={startTimeStr} onChange={(e) => setStartTimeStr(e.target.value)} style={{ maxWidth: '180px' }} />
+              </div>
+            </div>
+            
+            <div className="settings-item">
+              <div className="settings-item-label">Simulate Stops</div>
+              <div className="settings-item-value">
+                <input type="checkbox" checked={useRandomStops} onChange={(e) => setUseRandomStops(e.target.checked)} />
+              </div>
+            </div>
+            
+            <div className="settings-item" onClick={() => !isPremiumUnlocked && setShowPremiumModal(true)} style={{ cursor: !isPremiumUnlocked ? 'pointer' : 'default' }}>
+              <div className="settings-item-label">
+                {!isPremiumUnlocked ? <Lock size={16} color="#ef4444" /> : <Unlock size={16} color="#10b981" />}
+                Include HR
+              </div>
+              <div className="settings-item-value">
+                <input type="checkbox" checked={includeHR} onChange={(e) => setIncludeHR(e.target.checked)} disabled={!isPremiumUnlocked} />
+              </div>
+            </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-tertiary)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input type="checkbox" id="snapToggle" checked={isSnapping} onChange={(e) => setIsSnapping(e.target.checked)} />
-            <label htmlFor="snapToggle" style={{ fontSize: '12px', cursor: 'pointer' }}>Snap to Roads</label>
+            <div className="settings-item" onClick={() => !isPremiumUnlocked && setShowPremiumModal(true)} style={{ cursor: !isPremiumUnlocked ? 'pointer' : 'default' }}>
+              <div className="settings-item-label">
+                {!isPremiumUnlocked ? <Lock size={16} color="#ef4444" /> : <Unlock size={16} color="#10b981" />}
+                Power/Cadence
+              </div>
+              <div className="settings-item-value">
+                <input type="checkbox" checked={includePowerCadence} onChange={(e) => setIncludePowerCadence(e.target.checked)} disabled={!isPremiumUnlocked} />
+              </div>
+            </div>
           </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
+          {!generatedTrack ? (
+            <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2} style={{ padding: '16px', fontSize: '14px', borderRadius: '12px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
+              {isGenerating ? 'Simulating Physics...' : 'Generate Analytics'} <Zap size={18} />
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button className="btn-primary" onClick={handleDownload} style={{ flex: 1, padding: '16px', display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                Download TCX <Download size={18} />
+              </button>
+              <button className="btn-secondary" onClick={() => setGeneratedTrack(null)} style={{ flex: 1, display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                Re-generate <RefreshCw size={18} />
+              </button>
+            </div>
+          )}
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input type="checkbox" id="stopsToggle" checked={useRandomStops} onChange={(e) => setUseRandomStops(e.target.checked)} />
-            <label htmlFor="stopsToggle" style={{ fontSize: '12px', cursor: 'pointer' }}>Simulate Stops</label>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input type="checkbox" id="hrToggle" checked={includeHR} onChange={(e) => setIncludeHR(e.target.checked)} />
-            <label htmlFor="hrToggle" style={{ fontSize: '12px', cursor: 'pointer' }}>Include HR</label>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input type="checkbox" id="pwrToggle" checked={includePowerCadence} onChange={(e) => setIncludePowerCadence(e.target.checked)} />
-            <label htmlFor="pwrToggle" style={{ fontSize: '12px', cursor: 'pointer' }}>Power/Cadence</label>
-          </div>
+          {generatedTrack && (
+             <a href="https://www.strava.com/upload/select" target="_blank" rel="noreferrer" className="btn-secondary" style={{ display: 'flex', justifyContent: 'center', gap: '8px', textDecoration: 'none', background: '#fc4c02', color: 'white', border: 'none', padding: '16px', borderRadius: '12px' }}>
+               Upload to Strava
+             </a>
+          )}
         </div>
-
-        {!generatedTrack ? (
-          <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2} style={{ width: '100%', padding: '16px', fontSize: '14px', borderRadius: '12px' }}>
-            {isGenerating ? 'Simulating Physics...' : 'Generate Analytics'}
-          </button>
-        ) : (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn-primary" onClick={handleDownload} style={{ flex: 1, padding: '16px' }}>Download TCX</button>
-            <button className="btn-secondary" onClick={() => setGeneratedTrack(null)} style={{ flex: 1 }}>Re-generate</button>
-          </div>
-        )}
-        
-        {generatedTrack && (
-           <a href="https://www.strava.com/upload/select" target="_blank" className="btn-secondary" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', background: '#fc4c02', color: 'white', border: 'none', padding: '16px', borderRadius: '12px' }}>
-             Upload to Strava
-           </a>
-        )}
 
         {generatedTrack && <Dashboard track={generatedTrack} sport={sport} />}
-        
-        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '8px' }}>
-          <p>Waypoints: {waypoints.length} • Simulation Nodes: {osrmRoute.length * loops}</p>
-        </div>
       </div>
+
+      {showPremiumModal && (
+        <div className="modal-overlay" onClick={() => setShowPremiumModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <Lock size={48} color="#fc4c02" style={{ marginBottom: '16px' }} />
+            <h2 style={{ margin: '0 0 12px 0', fontSize: '20px' }}>Pro Features Locked</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '24px' }}>
+              Buka fitur Spoofing Device & Target Heart Rate untuk simulasi yang 100% mirip aslinya.
+            </p>
+            <a href="https://saweria.co/sangkalaaji" target="_blank" rel="noreferrer" style={{ display: 'inline-block', width: '100%', padding: '12px', background: '#fc4c02', color: '#fff', borderRadius: '12px', textDecoration: 'none', fontWeight: 'bold', marginBottom: '16px' }}>
+              Support via Saweria
+            </a>
+            
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px' }}>Atau ketik rahasia "sangkalaaji" 10x di bawah untuk gratis:</p>
+              <textarea 
+                value={secretBypass} 
+                onChange={e => setSecretBypass(e.target.value)} 
+                placeholder="Ketik di sini..."
+                style={{ width: '100%', height: '80px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px', color: 'var(--text-primary)', resize: 'none' }}
+              />
+            </div>
+            
+            <button onClick={() => setShowPremiumModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', marginTop: '16px', cursor: 'pointer', fontSize: '14px' }}>
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
