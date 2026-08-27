@@ -65,15 +65,7 @@ const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => 
   return R * c;
 }
 
-const searchLocation = async (query: string) => {
-  if (!query.trim()) return null;
-  const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
-  const data = await res.json();
-  if (data && data.length > 0) {
-    return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-  }
-  return null;
-}
+
 
 export default function App() {
   const [history, setHistory] = useState<Waypoint[][]>([[]]);
@@ -100,11 +92,6 @@ export default function App() {
   const [includePowerCadence, setIncludePowerCadence] = useState(true)
   const [targetHR, setTargetHR] = useState(140)
   const [gpsAccuracy, setGpsAccuracy] = useState<'Perfect'|'Good'|'Poor'>('Good')
-
-  // Route Search states
-  const [startQuery, setStartQuery] = useState('')
-  const [endQuery, setEndQuery] = useState('')
-  const [isSearchingRoute, setIsSearchingRoute] = useState(false)
 
   const waypoints = history[historyIndex];
 
@@ -157,23 +144,7 @@ export default function App() {
     };
 
     calculateRoute();
-  }, [waypoints, sport, loops]); // Recalculate if loops change to close route
-
-  const handleRouteSearch = async () => {
-    setIsSearchingRoute(true);
-    const startRes = await searchLocation(startQuery);
-    const endRes = await searchLocation(endQuery);
-    setIsSearchingRoute(false);
-
-    if (startRes && endRes) {
-      pushHistory([
-        { lat: startRes.lat, lng: startRes.lng, snapped: true },
-        { lat: endRes.lat, lng: endRes.lng, snapped: true }
-      ]);
-    } else {
-      alert("Lokasi Start atau End tidak ditemukan!");
-    }
-  }
+  }, [waypoints, sport, loops]); 
 
   const setQuickDistance = (targetKm: number) => {
     if (osrmRoute.length < 2) return alert("Gambar rute dulu!");
@@ -294,56 +265,51 @@ export default function App() {
           <Marker key={i} position={wp} eventHandlers={{ click: () => handleMarkerClick(i) }} />
         ))}
         {osrmRoute.length > 0 && (
-          <Polyline positions={osrmRoute} color="#09090b" weight={4} opacity={0.8} />
+          <Polyline positions={osrmRoute} color="#fc4c02" weight={5} opacity={0.9} />
         )}
       </MapContainer>
 
+      {/* Mobile Logo Layer (Detached) */}
+      <div className="mobile-logo">
+        <h1 style={{ fontSize: '20px', fontWeight: '800', color: '#fc4c02', margin: 0 }}>Kalla.</h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '11px', margin: 0 }}>Realism Engine</p>
+      </div>
+
       {/* Floating Control Panel */}
       <div className="control-panel glass-panel">
+        <div className="desktop-logo" style={{ marginBottom: '-8px' }}>
+          <h1 style={{ fontSize: '26px', fontWeight: '800', color: '#fc4c02', margin: 0 }}>Kalla.</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '12px', margin: 0 }}>Advanced Activity Spoofing</p>
+        </div>
+
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '4px' }}>Kalla Realism</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Advanced Activity Spoofing</p>
-        </div>
-
-        {/* Route Search */}
-        <div style={{ marginTop: '16px', background: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>Search Route</label>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-            <input type="text" placeholder="Start location..." value={startQuery} onChange={e => setStartQuery(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px' }} />
-            <input type="text" placeholder="End location..." value={endQuery} onChange={e => setEndQuery(e.target.value)} style={{ flex: 1, padding: '8px', borderRadius: '6px' }} />
-          </div>
-          <button className="btn-secondary" style={{ width: '100%', fontSize: '12px', padding: '6px' }} onClick={handleRouteSearch} disabled={isSearchingRoute}>
-            {isSearchingRoute ? 'Searching...' : 'Find Route'}
-          </button>
-        </div>
-
-        <div style={{ marginTop: '12px' }}>
-          <label className="btn-secondary" style={{ display: 'block', textAlign: 'center', width: '100%' }}>
-            Upload GPX/TCX (Edit Route)
+          <label className="btn-secondary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+            <span style={{ marginRight: '8px' }}>📂</span> Upload GPX / TCX
             <input type="file" accept=".gpx,.tcx" style={{ display: 'none' }} onChange={handleFileUpload} />
           </label>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-          <button className="btn-secondary" onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0} style={{ flex: 1, padding: '8px' }}>Undo</button>
-          <button className="btn-secondary" onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1} style={{ flex: 1, padding: '8px' }}>Redo</button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn-secondary" onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0} style={{ flex: 1 }}>↩ Undo</button>
+          <button className="btn-secondary" onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1} style={{ flex: 1 }}>Redo ↪</button>
+          <button className="btn-secondary" onClick={handleClear} style={{ flex: 1, color: '#ef4444' }}>Clear</button>
         </div>
 
         {/* Quick Targets */}
-        <div style={{ marginTop: '16px' }}>
-          <label style={{ fontSize: '12px', fontWeight: '500' }}>Quick Distance (Auto Loops)</label>
-          <div style={{ display: 'flex', gap: '4px', marginTop: '4px' }}>
+        <div>
+          <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>Auto Loops (Target Distance)</label>
+          <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
             {[5, 10, 21, 42, 50, 100].map(km => (
-              <button key={km} className="btn-secondary" style={{ flex: 1, padding: '4px 0', fontSize: '12px' }} onClick={() => setQuickDistance(km)}>
-                {km}k
+              <button key={km} className="btn-secondary" style={{ flex: 1, padding: '6px 0', fontSize: '12px' }} onClick={() => setQuickDistance(km)}>
+                {km}K
               </button>
             ))}
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div>
-              <label style={{ fontSize: '12px', fontWeight: '500' }}>Sport Type</label>
+              <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Sport Type</label>
               <select value={sport} onChange={(e) => setSport(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
                 <option value="Running">Running</option>
                 <option value="Walking">Walking</option>
@@ -353,34 +319,34 @@ export default function App() {
           <div>
             {sport === 'Biking' ? (
               <>
-                <label style={{ fontSize: '12px', fontWeight: '500' }}>Target Speed (km/h)</label>
-                <input type="number" step="0.1" value={speedKmh} onChange={(e) => setSpeedKmh(parseFloat(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Target Speed (km/h)</label>
+                <input type="number" step="0.1" value={speedKmh} onChange={(e) => setSpeedKmh(parseFloat(e.target.value))} />
               </>
             ) : (
               <>
-                <label style={{ fontSize: '12px', fontWeight: '500' }}>Target Pace (min/km)</label>
+                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Target Pace (min/km)</label>
                 <div style={{ display: 'flex', gap: '4px' }}>
-                  <input type="number" min="1" max="60" value={paceMin} onChange={(e) => setPaceMin(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} placeholder="Min" />
-                  <span style={{ display: 'flex', alignItems: 'center' }}>:</span>
-                  <input type="number" min="0" max="59" value={paceSec} onChange={(e) => setPaceSec(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} placeholder="Sec" />
+                  <input type="number" min="1" max="60" value={paceMin} onChange={(e) => setPaceMin(parseInt(e.target.value))} placeholder="Min" />
+                  <span style={{ display: 'flex', alignItems: 'center', fontWeight: 'bold' }}>:</span>
+                  <input type="number" min="0" max="59" value={paceSec} onChange={(e) => setPaceSec(parseInt(e.target.value))} placeholder="Sec" />
                 </div>
               </>
             )}
           </div>
           
           <div>
-            <label style={{ fontSize: '12px', fontWeight: '500' }}>Target Avg HR (bpm)</label>
-            <input type="number" value={targetHR} onChange={(e) => setTargetHR(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Target Avg HR (bpm)</label>
+            <input type="number" value={targetHR} onChange={(e) => setTargetHR(parseInt(e.target.value))} />
           </div>
 
           <div>
-            <label style={{ fontSize: '12px', fontWeight: '500' }}>Loops (Laps)</label>
-            <input type="number" min="1" value={loops} onChange={(e) => setLoops(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
+            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Loops (Laps)</label>
+            <input type="number" min="1" value={loops} onChange={(e) => setLoops(parseInt(e.target.value))} />
           </div>
 
           <div>
-            <label style={{ fontSize: '12px', fontWeight: '500' }}>Pacing Strategy</label>
-            <select value={pacingStrategy} onChange={(e) => setPacingStrategy(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
+            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Pacing Strategy</label>
+            <select value={pacingStrategy} onChange={(e) => setPacingStrategy(e.target.value as any)}>
               <option value="Flat">Flat / Steady</option>
               <option value="Progression">Progression</option>
               <option value="Negative Split">Negative Split</option>
@@ -388,8 +354,8 @@ export default function App() {
           </div>
 
           <div>
-           <label style={{ fontSize: '12px', fontWeight: '500' }}>GPS Accuracy</label>
-           <select value={gpsAccuracy} onChange={(e) => setGpsAccuracy(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
+           <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>GPS Accuracy</label>
+           <select value={gpsAccuracy} onChange={(e) => setGpsAccuracy(e.target.value as any)}>
              <option value="Perfect">Perfect (Dual-Band)</option>
              <option value="Good">Good (Phone)</option>
              <option value="Poor">Poor (City/Forest)</option>
@@ -397,21 +363,23 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ marginTop: '12px' }}>
-           <label style={{ fontSize: '12px', fontWeight: '500' }}>Device Spoofing (Creator)</label>
-           <select value={deviceKey} onChange={(e) => setDeviceKey(e.target.value as any)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }}>
-             {Object.entries(DEVICES).map(([k, d]) => (
-               <option key={k} value={k}>{d.name}</option>
-             ))}
-           </select>
+        <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div>
+             <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Device Spoofing</label>
+             <select value={deviceKey} onChange={(e) => setDeviceKey(e.target.value as any)}>
+               {Object.entries(DEVICES).map(([k, d]) => (
+                 <option key={k} value={k}>{d.name}</option>
+               ))}
+             </select>
+          </div>
+
+          <div>
+             <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>Start Time</label>
+             <input type="datetime-local" value={startTimeStr} onChange={(e) => setStartTimeStr(e.target.value)} />
+          </div>
         </div>
 
-        <div style={{ marginTop: '12px' }}>
-           <label style={{ fontSize: '12px', fontWeight: '500' }}>Start Time</label>
-           <input type="datetime-local" value={startTimeStr} onChange={(e) => setStartTimeStr(e.target.value)} style={{ width: '100%', padding: '8px', borderRadius: '8px' }} />
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', background: 'var(--bg-tertiary)', padding: '12px', borderRadius: 'var(--radius-md)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input type="checkbox" id="snapToggle" checked={isSnapping} onChange={(e) => setIsSnapping(e.target.checked)} />
             <label htmlFor="snapToggle" style={{ fontSize: '12px', cursor: 'pointer' }}>Snap to Roads</label>
@@ -434,28 +402,26 @@ export default function App() {
         </div>
 
         {!generatedTrack ? (
-          <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2} style={{ marginTop: '16px', width: '100%' }}>
+          <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2} style={{ width: '100%', padding: '16px', fontSize: '14px', borderRadius: '12px' }}>
             {isGenerating ? 'Simulating Physics...' : 'Generate Analytics'}
           </button>
         ) : (
-          <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-            <button className="btn-primary" onClick={handleDownload} style={{ flex: 1 }}>Download TCX</button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn-primary" onClick={handleDownload} style={{ flex: 1, padding: '16px' }}>Download TCX</button>
             <button className="btn-secondary" onClick={() => setGeneratedTrack(null)} style={{ flex: 1 }}>Re-generate</button>
           </div>
         )}
         
         {generatedTrack && (
-           <a href="https://www.strava.com/upload/select" target="_blank" className="btn-secondary" style={{ display: 'block', textAlign: 'center', marginTop: '8px', textDecoration: 'none', background: '#fc4c02', color: 'white', border: 'none' }}>
+           <a href="https://www.strava.com/upload/select" target="_blank" className="btn-secondary" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', background: '#fc4c02', color: 'white', border: 'none', padding: '16px', borderRadius: '12px' }}>
              Upload to Strava
            </a>
         )}
 
-        <button className="btn-secondary" onClick={handleClear} style={{ marginTop: '8px', width: '100%' }}>Clear Map</button>
-
         {generatedTrack && <Dashboard track={generatedTrack} sport={sport} />}
         
-        <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          <p>Waypoints: {waypoints.length} | Nodes: {osrmRoute.length * loops}</p>
+        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '8px' }}>
+          <p>Waypoints: {waypoints.length} • Simulation Nodes: {osrmRoute.length * loops}</p>
         </div>
       </div>
     </div>

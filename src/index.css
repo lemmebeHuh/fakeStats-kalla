@@ -1,26 +1,28 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import 'leaflet/dist/leaflet.css';
 
 :root {
-  /* Clean Monochrome Theme */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f4f4f5;
-  --bg-glass: rgba(255, 255, 255, 0.85);
+  /* Premium Dark Theme */
+  --bg-primary: #09090b;
+  --bg-secondary: #18181b;
+  --bg-tertiary: #27272a;
+  --bg-glass: rgba(9, 9, 11, 0.75);
   
-  --text-primary: #18181b;
-  --text-secondary: #52525b;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
   
-  --border-color: #e4e4e7;
-  --accent-color: #09090b;
-  --accent-hover: #27272a;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --accent-color: #fc4c02; /* Strava Orange for main CTAs */
+  --accent-hover: #e34402;
   
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.3);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
   
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
   
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
@@ -36,7 +38,7 @@ html, body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
-  overflow: hidden; /* App-like feel */
+  overflow: hidden;
   height: 100%;
   width: 100%;
 }
@@ -47,58 +49,99 @@ html, body {
   position: relative;
 }
 
+/* Typography */
+h1, h2, h3 {
+  letter-spacing: -0.02em;
+}
+
 /* Glassmorphism Panel */
 .glass-panel {
   background: var(--bg-glass);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-glass);
 }
 
-/* UI Elements */
+/* Forms */
+input[type="number"], 
+input[type="text"], 
+input[type="datetime-local"], 
+select {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid transparent;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+input:focus, select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.2);
+}
+
+/* Input Checkbox Customization */
+input[type="checkbox"] {
+  accent-color: var(--accent-color);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* Buttons */
+button {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .btn-primary {
   background-color: var(--accent-color);
   color: #fff;
-  border: none;
-  padding: 12px 20px;
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: var(--font-sans);
+  box-shadow: 0 2px 4px rgba(252, 76, 2, 0.3);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background-color: var(--accent-hover);
   transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(252, 76, 2, 0.4);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn-secondary {
-  background-color: var(--bg-secondary);
+  background-color: var(--bg-tertiary);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  padding: 12px 20px;
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: var(--font-sans);
 }
 
-.btn-secondary:hover {
-  background-color: #e4e4e7;
+.btn-secondary:hover:not(:disabled) {
+  background-color: #3f3f46;
+}
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-/* Leaflet Overrides */
-.leaflet-container {
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-}
-
-/* Layout Utilities */
+/* Layout */
 .app-layout {
   display: flex;
   height: 100%;
@@ -106,7 +149,14 @@ html, body {
   position: relative;
 }
 
-/* Floating Sidebar/BottomSheet */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  background-color: var(--bg-primary);
+}
+
+/* Control Panel */
 .control-panel {
   position: absolute;
   top: 16px;
@@ -118,11 +168,29 @@ html, body {
   display: flex;
   flex-direction: column;
   padding: 24px;
-  gap: 16px;
+  gap: 20px;
   overflow-y: auto;
   box-sizing: border-box;
 }
 
+/* Custom Scrollbar for sleekness */
+.control-panel::-webkit-scrollbar {
+  width: 6px;
+}
+.control-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.control-panel::-webkit-scrollbar-thumb {
+  background-color: var(--border-color);
+  border-radius: 10px;
+}
+
+/* Mobile Logo Container */
+.mobile-logo {
+  display: none;
+}
+
+/* Mobile Responsiveness */
 @media (max-width: 768px) {
   .control-panel {
     top: auto;
@@ -130,13 +198,31 @@ html, body {
     bottom: 0;
     width: 100%;
     max-width: 100%;
-    max-height: 55vh;
+    max-height: 60vh;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     border-bottom: none;
     border-left: none;
     border-right: none;
-    padding: 16px;
-    padding-bottom: 24px; /* padding for bottom edge */
-    gap: 12px;
+    padding: 20px 20px 32px 20px;
+    gap: 16px;
+  }
+  
+  .desktop-logo {
+    display: none;
+  }
+
+  .mobile-logo {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 1000;
+    background: var(--bg-glass);
+    padding: 10px 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(12px);
+    box-shadow: var(--shadow-md);
   }
 }
