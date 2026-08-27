@@ -138,10 +138,13 @@ export default function Dashboard({ track, sport }: DashboardProps) {
   const { totalDistance, movingTimeMs, elevGain, maxElev, hasHR, avgHr, maxHr, hasCad, avgCad, maxCad, chartData, splits, avgSpeed } = stats;
 
   return (
-    <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '24px' }}>
-      <h2 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '16px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Simulation Stats</h2>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+    <div style={{ marginTop: '24px', background: 'var(--bg-primary)', padding: '24px', borderRadius: '16px', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-md)' }}>
+      <h3 style={{ margin: '0 0 20px 0', fontSize: '16px', fontWeight: '700', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        Simulation Stats 
+        <span style={{ fontSize: '11px', background: 'var(--bg-tertiary)', padding: '4px 8px', borderRadius: '12px', fontWeight: '500', color: 'var(--text-secondary)' }}>{sport}</span>
+      </h3>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px', marginBottom: '28px' }}>
         <div>
           <p style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Distance</p>
           <p style={{ fontSize: '18px', fontWeight: '700' }}>{(totalDistance / 1000).toFixed(2)} <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)' }}>km</span></p>
@@ -218,25 +221,39 @@ export default function Dashboard({ track, sport }: DashboardProps) {
         </div>
       )}
 
-      {splits.length > 0 && (
-        <div style={{ marginTop: '16px' }}>
-          <p style={{ fontSize: '11px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Splits</p>
-          <div style={{ fontSize: '12px', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '12px' }}>
-            <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '8px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-              <div style={{ width: '40px' }}>KM</div>
-              <div style={{ flex: 1 }}>Pace</div>
-              <div style={{ flex: 1 }}>Elev</div>
-            </div>
-            {splits.map((s, i) => (
-              <div key={i} style={{ display: 'flex', padding: '4px 0' }}>
-                <div style={{ width: '40px', fontWeight: '600' }}>{s.km}</div>
-                <div style={{ flex: 1 }}>{formatTime(s.pace)}/km</div>
-                <div style={{ flex: 1 }}>{s.elev > 0 ? `+${s.elev}` : s.elev}m</div>
+      {splits.length > 0 && (() => {
+        const maxPace = Math.max(...splits.map(s => s.pace));
+        return (
+          <div style={{ marginTop: '16px' }}>
+            <p style={{ fontSize: '11px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Splits</p>
+            <div style={{ fontSize: '12px', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '8px', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                <div style={{ width: '40px' }}>KM</div>
+                <div style={{ flex: 1 }}>Pace</div>
+                <div style={{ width: '60px', textAlign: 'right' }}>Elev</div>
               </div>
-            ))}
+              {splits.map((s, i) => (
+                <div key={i} style={{ display: 'flex', padding: '6px 0', alignItems: 'center' }}>
+                  <div style={{ width: '40px', fontWeight: '600' }}>{s.km}</div>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '45px' }}>{formatTime(s.pace)}</span>
+                    <div style={{ 
+                      height: '6px', 
+                      background: '#fc4c02', 
+                      borderRadius: '3px', 
+                      width: `${(s.pace / maxPace) * 100}%`,
+                      maxWidth: '120px'
+                    }} />
+                  </div>
+                  <div style={{ width: '60px', textAlign: 'right', color: s.elev > 0 ? '#10b981' : 'var(--text-primary)' }}>
+                    {s.elev > 0 ? `+${s.elev}` : s.elev}m
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

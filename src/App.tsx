@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { MapContainer, TileLayer, useMapEvents, Polyline, Marker, LayersControl, useMap } from 'react-leaflet'
 import { MousePointer2, PenTool, Undo2, Redo2, Trash2, Lock, Unlock, Upload, Settings2, Download, RefreshCw, Route, Zap } from 'lucide-react'
 import { fetchOSRMRoute } from './lib/osrm'
@@ -162,6 +162,7 @@ export default function App() {
   const [appMode, setAppMode] = useState<'draw' | 'upload'>('draw')
   const [drawMode, setDrawMode] = useState<'click' | 'freehand'>('click')
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [activeQuickDistance, setActiveQuickDistance] = useState<number | null>(null)
   
   // Premium States
   const [isPremiumUnlocked, setIsPremiumUnlocked] = useState(false)
@@ -181,7 +182,16 @@ export default function App() {
 
   const waypoints = history[historyIndex];
 
+  const drawnDistance = useMemo(() => {
+    let dist = 0;
+    for(let i = 1; i < osrmRoute.length; i++){
+       dist += getDistance(osrmRoute[i-1].lat, osrmRoute[i-1].lng, osrmRoute[i].lat, osrmRoute[i].lng);
+    }
+    return dist;
+  }, [osrmRoute]);
+
   useEffect(() => {
+    setActiveQuickDistance(null);
     const calculateRoute = async () => {
       if (waypoints.length < 2) {
         setOsrmRoute([]);
@@ -234,11 +244,8 @@ export default function App() {
 
   const setQuickDistance = (targetKm: number) => {
     if (osrmRoute.length < 2) return alert("Gambar rute dulu!");
-    let loopDist = 0;
-    for(let i = 1; i < osrmRoute.length; i++){
-       loopDist += getDistance(osrmRoute[i-1].lat, osrmRoute[i-1].lng, osrmRoute[i].lat, osrmRoute[i].lng);
-    }
-    const reqLoops = Math.max(1, Math.ceil((targetKm * 1000) / loopDist));
+    setActiveQuickDistance(targetKm);
+    const reqLoops = Math.max(1, Math.ceil((targetKm * 1000) / drawnDistance));
     setLoops(reqLoops);
   }
 
@@ -427,7 +434,7 @@ export default function App() {
               </div>
               <div className="settings-item-value" style={{ gap: '2px', flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '60%' }}>
                 {[5, 10, 21, 42].map(km => (
-                  <button key={km} onClick={() => setQuickDistance(km)} style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 8px', fontSize: '12px', color: 'var(--text-primary)' }}>
+                  <button key={km} onClick={() => setQuickDistance(km)} style={{ background: activeQuickDistance === km ? 'var(--accent-color)' : 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '4px 8px', fontSize: '12px', color: activeQuickDistance === km ? '#fff' : 'var(--text-primary)' }}>
                     {km}K
                   </button>
                 ))}
@@ -527,6 +534,13 @@ export default function App() {
             </div>
             
             <div className="settings-item">
+              <div className="settings-item-label">Loops (Laps)</div>
+              <div className="settings-item-value">
+                <input type="number" min="1" value={loops} onChange={(e) => setLoops(parseInt(e.target.value))} style={{ maxWidth: '40px' }} />
+              </div>
+            </div>
+            
+            <div className="settings-item">
               <div className="settings-item-label">Simulate Stops</div>
               <div className="settings-item-value">
                 <input type="checkbox" checked={useRandomStops} onChange={(e) => setUseRandomStops(e.target.checked)} />
@@ -579,6 +593,12 @@ export default function App() {
         </div>
 
         {generatedTrack && <Dashboard track={generatedTrack} sport={sport} />}
+
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center', marginTop: '16px', background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '12px', fontWeight: '500' }}>
+          Real-time Distance: <span style={{ color: 'var(--text-primary)', fontWeight: 'bold' }}>{(drawnDistance / 1000).toFixed(2)} km</span>
+          <br/>
+          <span style={{ fontSize: '11px', opacity: 0.8 }}>Waypoints: {waypoints.length} • Simulation Nodes: {osrmRoute.length * loops}</span>
+        </div>
       </div>
 
       {showPremiumModal && (
