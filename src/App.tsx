@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { MapContainer, TileLayer, useMapEvents, Polyline, Marker, LayersControl, useMap } from 'react-leaflet'
+import { MousePointer2, PenTool, Undo2, Redo2, Trash2 } from 'lucide-react'
 import { fetchOSRMRoute } from './lib/osrm'
 import { generateActivity, type TrackPoint, type PacingStrategy } from './lib/realism-engine'
 import { generateTCX, downloadFile, DEVICES } from './lib/tcx-generator'
@@ -90,6 +91,7 @@ function FreehandDrawer({ isFreehandMode, onFreehandComplete }: { isFreehandMode
     container.style.touchAction = 'none';
 
     const onPointerDown = (e: PointerEvent) => {
+      if (!e.isPrimary) return;
       isDrawingRef.current = true;
       const latlng = map.mouseEventToLatLng(e);
       pointsRef.current = [{lat: latlng.lat, lng: latlng.lng}];
@@ -97,7 +99,7 @@ function FreehandDrawer({ isFreehandMode, onFreehandComplete }: { isFreehandMode
     };
 
     const onPointerMove = (e: PointerEvent) => {
-      if (!isDrawingRef.current) return;
+      if (!isDrawingRef.current || !e.isPrimary) return;
       const latlng = map.mouseEventToLatLng(e);
       pointsRef.current.push({lat: latlng.lat, lng: latlng.lng});
       setPoints([...pointsRef.current]);
@@ -350,13 +352,23 @@ export default function App() {
       {appMode === 'draw' && (
         <div className="floating-toolbar">
           <div className="floating-btn-group">
-            <button className={drawMode === 'click' ? 'active' : ''} onClick={() => setDrawMode('click')}>👆 Tap/Click</button>
-            <button className={drawMode === 'freehand' ? 'active' : ''} onClick={() => setDrawMode('freehand')}>✍️ Freehand</button>
+            <button className={drawMode === 'click' ? 'active' : ''} onClick={() => setDrawMode('click')} title="Tap / Click">
+              <MousePointer2 size={18} /> Tap
+            </button>
+            <button className={drawMode === 'freehand' ? 'active' : ''} onClick={() => setDrawMode('freehand')} title="Freehand">
+              <PenTool size={18} /> Freehand
+            </button>
           </div>
           <div className="floating-btn-group">
-            <button onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0}>↩ Undo</button>
-            <button onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1}>Redo ↪</button>
-            <button onClick={handleClear} style={{ color: '#ef4444' }}>🗑️ Clear</button>
+            <button onClick={() => { if(historyIndex>0) setHistoryIndex(historyIndex-1) }} disabled={historyIndex === 0} title="Undo">
+              <Undo2 size={18} /> Undo
+            </button>
+            <button onClick={() => { if(historyIndex<history.length-1) setHistoryIndex(historyIndex+1) }} disabled={historyIndex === history.length - 1} title="Redo">
+              <Redo2 size={18} /> Redo
+            </button>
+            <button onClick={handleClear} style={{ color: '#ef4444' }} title="Clear All">
+              <Trash2 size={18} /> Clear
+            </button>
           </div>
         </div>
       )}
