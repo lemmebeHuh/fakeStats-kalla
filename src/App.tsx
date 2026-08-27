@@ -111,6 +111,30 @@ export default function App() {
     calculateRoute();
   }, [waypoints, sport]);
 
+  useEffect(() => {
+    if (osrmRoute.length < 2) {
+      setGeneratedTrack(null);
+      return;
+    }
+    
+    const delayDebounceFn = setTimeout(async () => {
+      setIsGenerating(true);
+      try {
+        const startDateTime = new Date(startTimeStr);
+        const track = await generateActivity(
+          osrmRoute, startDateTime, pace, sport, useRandomStops, pacingStrategy, 1.0, loops, includeHR, includePowerCadence
+        );
+        setGeneratedTrack(track);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsGenerating(false);
+      }
+    }, 800);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [osrmRoute, startTimeStr, pace, sport, useRandomStops, pacingStrategy, loops, includeHR, includePowerCadence]);
+
   const pushHistory = (newWaypoints: Waypoint[]) => {
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(newWaypoints);
@@ -140,26 +164,6 @@ export default function App() {
     setHistoryIndex(0);
     setOsrmRoute([]);
     setGeneratedTrack(null);
-  }
-
-  const handleGenerate = async () => {
-    if (osrmRoute.length < 2) {
-      alert("Draw a route first!")
-      return;
-    }
-    setIsGenerating(true)
-    try {
-      const startDateTime = new Date(startTimeStr);
-      const track = await generateActivity(
-        osrmRoute, startDateTime, pace, sport, useRandomStops, pacingStrategy, 1.0, loops, includeHR, includePowerCadence
-      );
-      setGeneratedTrack(track);
-    } catch (err) {
-      console.error(err)
-      alert("Error generating activity.")
-    } finally {
-      setIsGenerating(false)
-    }
   }
 
   const handleDownload = () => {
@@ -304,20 +308,14 @@ export default function App() {
           </div>
         </div>
 
-        {!generatedTrack ? (
-          <button className="btn-primary" onClick={handleGenerate} disabled={isGenerating || osrmRoute.length < 2} style={{ marginTop: '12px' }}>
-            {isGenerating ? 'Simulating Physics...' : 'Generate Analytics'}
+        <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+          <button className="btn-primary" onClick={handleDownload} disabled={!generatedTrack} style={{ flex: 1 }}>
+            {isGenerating ? 'Simulating...' : 'Download TCX'}
           </button>
-        ) : (
-          <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
-            <button className="btn-primary" onClick={handleDownload} style={{ flex: 1 }}>Download TCX</button>
-            <button className="btn-secondary" onClick={() => setGeneratedTrack(null)} style={{ flex: 1 }}>Re-generate</button>
-          </div>
-        )}
+          <button className="btn-secondary" onClick={handleClear} style={{ flex: 1 }}>Clear Map</button>
+        </div>
 
-        <button className="btn-secondary" onClick={handleClear} style={{ marginTop: '8px', width: '100%' }}>Clear Map</button>
-
-        {generatedTrack && <Dashboard track={generatedTrack} sport={sport} />}
+        {generatedTrack && !isGenerating && <Dashboard track={generatedTrack} sport={sport} />}
         
         <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
           <p>Waypoints: {waypoints.length} | Nodes: {osrmRoute.length * loops}</p>
